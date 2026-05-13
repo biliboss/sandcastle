@@ -25,6 +25,7 @@ import { pollRemaining, ringOffset } from "./stats.js";
 import { classifyError } from "./classifyError.js";
 import { groupErrors } from "./errorGrouping.js";
 import { isStuck } from "./stuck.js";
+import { heartbeatLagSeries, polylinePoints } from "./sparkline.js";
 import { renderEventLine } from "./eventLine.js";
 import { pipelineHtml } from "./pipeline.js";
 import { fmtTime, fmtElapsed, fmtUptime, escape } from "./util.js";
@@ -41,6 +42,10 @@ document.addEventListener("alpine:init", () => {
   Alpine.magic("classify", () => classifyError);
   Alpine.magic("groupErrors", () => groupErrors);
   Alpine.magic("isStuck", () => isStuck);
+  Alpine.magic("sparkline", () => ({
+    series: heartbeatLagSeries,
+    points: polylinePoints,
+  }));
   Alpine.magic("eventLine", () => renderEventLine);
   Alpine.magic("pipeline", () => pipelineHtml);
   Alpine.magic("poll", () => ({ remaining: pollRemaining, ringOffset }));

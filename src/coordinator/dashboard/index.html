@@ -154,6 +154,11 @@
                     </template>
                   </div>
                   <div x-html="$pipeline(item)"></div>
+                  <template x-if="item.events.length >= 2">
+                    <svg class="heartbeat" viewBox="0 0 100 14" preserveAspectRatio="none">
+                      <polyline :points="$sparkline.points($sparkline.series(item, 20), 100, 14)"></polyline>
+                    </svg>
+                  </template>
                 </div>
                 <div class="right">
                   <div class="elapsed"

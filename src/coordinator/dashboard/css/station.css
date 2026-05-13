@@ -148,6 +148,23 @@
 }
 .pipeline .conn.done { background: var(--phos-mid); }
 
+/* Heartbeat-lag sparkline — sits below the pipeline strip in .core */
+.heartbeat {
+  width: 100%;
+  height: 14px;
+  display: block;
+  margin-top: 4px;
+}
+.heartbeat polyline {
+  fill: none;
+  stroke: var(--phos-mid);
+  stroke-width: 1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.station[data-state="stuck"] .heartbeat polyline { stroke: var(--red); }
+.station[data-state="error"] .heartbeat polyline { stroke: var(--red); }
+
 .station .right {
   text-align: right;
   font-family: "VT323", monospace;
