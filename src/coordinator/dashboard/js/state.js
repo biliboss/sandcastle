@@ -1,25 +1,25 @@
 /**
- * state.js — Alpine.store("coord") factory + pure dispatch-item reducer.
+ * state.js — Alpine.store("coord") factory + incremental dispatch-item map.
  *
  * Mutation flow:
  *   stream.js → store.pushEvent(ev)
  *     ├─ tick.start  → updates store.lastTickAt
- *     ├─ tick.done   → appends store.tickHistory
+ *     ├─ tick.done   → appends store.tickHistory (capped)
  *     ├─ action.ack  → routes to store.handleAck
- *     └─ everything else → pushed onto store.events
+ *     └─ everything else → push to store.events AND apply to store._itemsMap
  *
  * Read path:
  *   templates read $store.coord.{items, active, completed, errored, recentTicks, ...}
- *   Each getter is pure over .events (no side effects), Alpine-reactive.
+ *   `items` is a snapshot of the internal Map's values — O(items) per access,
+ *   not O(events). Active/completed/errored/okCount are O(items).
  *
  * Lifecycle:
- *   init()    — registered as `Alpine.store("coord").init` (auto-called by Alpine)
- *   teardown() — invoked from dashboard.destroy() to clean intervals/SSE
+ *   teardown() — invoked from dashboard.destroy() to clear interval/SSE.
  *
- * KNOWN COST: the items reducer re-walks the full event log every time any
- * getter is read (active/completed/errored each trigger it). Fine for ~hundreds
- * of events. If a session ever pushes thousands, rebuild incrementally inside
- * pushEvent and cache. Not done now to keep the reducer pure.
+ * Determinism contract: pushing N events one-by-one MUST yield the same
+ * `items` shape as a from-scratch rebuild over the same N events. The test
+ * suite (state.test.ts) pins this contract — any change to applyItemEvent
+ * needs to keep all those tests green.
  */
 
 import { TICK_HISTORY_MAX } from "./config.js";
@@ -37,6 +37,10 @@ export function buildStore() {
     connState: "init",
     ack: { hint: "ready", toast: { msg: "", isErr: false, show: false } },
     pendingActions: new Map(),
+
+    // Internal: incremental item aggregation. Mutated only by pushEvent →
+    // applyItemEvent. Templates read it via the `items` getter below.
+    _itemsMap: new Map(),
 
     // Mutable handles for teardown — set by stream.js + main.js.
     _es: null,
@@ -56,7 +60,7 @@ export function buildStore() {
       }
       if (ev.type === "tick.done") {
         this.tickHistory.push({ ts: ev.ts, busy: (ev.itemCount ?? 0) > 0 });
-        // Keep the array bounded so unbounded sessions don't grow without limit.
+        // Bound the array so unbounded sessions don't grow without limit.
         if (this.tickHistory.length > TICK_HISTORY_MAX * 4) {
           this.tickHistory.splice(
             0,
@@ -66,6 +70,7 @@ export function buildStore() {
         return;
       }
       this.events.push(ev);
+      applyItemEvent(this._itemsMap, ev);
     },
 
     handleAck(ev) {
@@ -87,7 +92,7 @@ export function buildStore() {
       }, 2400);
     },
 
-    /** Called on dashboard.destroy() — releases interval + SSE handle. */
+    /** Released on dashboard.destroy() — interval + SSE handle. */
     teardown() {
       if (this._tickIntervalId) clearInterval(this._tickIntervalId);
       if (this._toastTimer) clearTimeout(this._toastTimer);
@@ -103,10 +108,10 @@ export function buildStore() {
       this._es = null;
     },
 
-    // --- Derived views (pure getters over .events) ---
+    // --- Derived views (read-only over _itemsMap + tickHistory) ---
 
     get items() {
-      return rebuildItems(this.events);
+      return [...this._itemsMap.values()];
     },
     get active() {
       return this.items
@@ -131,90 +136,92 @@ export function buildStore() {
   };
 }
 
-/** Pure reducer: events[] → items[]. No side effects on the store. */
-function rebuildItems(events) {
-  const items = new Map();
-  for (const ev of events) {
-    const id = ev.itemId;
-    if (!id) continue;
-    let item = items.get(id);
-    if (!item) {
-      item = {
-        itemId: id,
-        repo: ev.repo,
-        title: ev.issueTitle,
-        issueNumber: ev.issueNumber,
-        events: [],
-        firstTs: ev.ts,
-        lastTs: ev.ts,
-        state: "running",
-        phase: null,
-        profile: null,
-        prUrl: null,
-        error: null,
-        steps: {
-          cache: false,
-          clone: false,
-          exec: false,
-          push: false,
-          pr: false,
-        },
-        activeStep: null,
-      };
-      items.set(id, item);
-    }
-    if (ev.repo) item.repo = ev.repo;
-    if (ev.issueTitle) item.title = ev.issueTitle;
-    if (ev.issueNumber) item.issueNumber = ev.issueNumber;
-    if (ev.phase) item.phase = ev.phase;
-    if (ev.profile) item.profile = ev.profile;
-    if (ev.prUrl) item.prUrl = ev.prUrl;
-    if (ev.error) item.error = ev.error;
-    item.events.push(ev);
-    item.lastTs = ev.ts;
-
-    if (ev.type === "dispatch.progress") {
-      item.activeStep = ev.step;
-      switch (ev.step) {
-        case "cache.ensure":
-          item.steps.cache = true;
-          break;
-        case "git.clone":
-          item.steps.clone = true;
-          break;
-        case "agent.exec.start":
-          item.steps.exec = "active";
-          break;
-        case "agent.exec.done":
-          item.steps.exec = true;
-          break;
-        case "git.push":
-          item.steps.push = true;
-          break;
-        case "pr.open":
-          item.steps.pr = "active";
-          break;
-      }
-    }
-    if (ev.type === "dispatch.start") item.firstTs = ev.ts;
-    if (ev.type === "dispatch.done") {
-      item.state = ev.error ? "error" : "ok";
-      if (!ev.error) {
-        item.steps.cache =
-          item.steps.clone =
-          item.steps.push =
-          item.steps.pr =
-            true;
-        item.steps.exec = true;
-        item.activeStep = null;
-      }
-    }
-    if (ev.type === "finalize.start") item.phase = "approved";
-    if (ev.type === "finalize.done") {
-      item.state = ev.error ? "error" : "ok";
-      item.phase = "approved";
-    }
-    if (ev.from === "Approved") item.phase = "approved";
+/**
+ * Apply one event to the items map. Pure with respect to `map` only —
+ * no other store fields mutated here.
+ *
+ * Exported so the test suite can verify equivalence with a from-scratch
+ * rebuild on the same event sequence.
+ */
+export function applyItemEvent(map, ev) {
+  const id = ev.itemId;
+  if (!id) return;
+  let item = map.get(id);
+  if (!item) {
+    item = {
+      itemId: id,
+      repo: ev.repo,
+      title: ev.issueTitle,
+      issueNumber: ev.issueNumber,
+      events: [],
+      firstTs: ev.ts,
+      lastTs: ev.ts,
+      state: "running",
+      phase: null,
+      profile: null,
+      prUrl: null,
+      error: null,
+      steps: {
+        cache: false,
+        clone: false,
+        exec: false,
+        push: false,
+        pr: false,
+      },
+      activeStep: null,
+    };
+    map.set(id, item);
   }
-  return [...items.values()];
+  if (ev.repo) item.repo = ev.repo;
+  if (ev.issueTitle) item.title = ev.issueTitle;
+  if (ev.issueNumber) item.issueNumber = ev.issueNumber;
+  if (ev.phase) item.phase = ev.phase;
+  if (ev.profile) item.profile = ev.profile;
+  if (ev.prUrl) item.prUrl = ev.prUrl;
+  if (ev.error) item.error = ev.error;
+  item.events.push(ev);
+  item.lastTs = ev.ts;
+
+  if (ev.type === "dispatch.progress") {
+    item.activeStep = ev.step;
+    switch (ev.step) {
+      case "cache.ensure":
+        item.steps.cache = true;
+        break;
+      case "git.clone":
+        item.steps.clone = true;
+        break;
+      case "agent.exec.start":
+        item.steps.exec = "active";
+        break;
+      case "agent.exec.done":
+        item.steps.exec = true;
+        break;
+      case "git.push":
+        item.steps.push = true;
+        break;
+      case "pr.open":
+        item.steps.pr = "active";
+        break;
+    }
+  }
+  if (ev.type === "dispatch.start") item.firstTs = ev.ts;
+  if (ev.type === "dispatch.done") {
+    item.state = ev.error ? "error" : "ok";
+    if (!ev.error) {
+      item.steps.cache =
+        item.steps.clone =
+        item.steps.push =
+        item.steps.pr =
+          true;
+      item.steps.exec = true;
+      item.activeStep = null;
+    }
+  }
+  if (ev.type === "finalize.start") item.phase = "approved";
+  if (ev.type === "finalize.done") {
+    item.state = ev.error ? "error" : "ok";
+    item.phase = "approved";
+  }
+  if (ev.from === "Approved") item.phase = "approved";
 }
