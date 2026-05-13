@@ -74,6 +74,39 @@ export interface DockerOptions {
    * When omitted, Docker's default bridge network is used.
    */
   readonly network?: string | readonly string[];
+
+  /**
+   * Memory limit for the container (passed as `--memory`).
+   * Accepts the same string format as docker (e.g. `"4g"`, `"512m"`).
+   * When omitted, no limit is set.
+   *
+   * Added by the multi-repo coordinator fork (ADR 0021) for hardening.
+   */
+  readonly memory?: string;
+
+  /**
+   * CPU quota for the container (passed as `--cpus`, e.g. `2`, `0.5`).
+   * When omitted, no limit is set.
+   *
+   * Added by the multi-repo coordinator fork (ADR 0021) for hardening.
+   */
+  readonly cpus?: number;
+
+  /**
+   * When true, makes the container's root filesystem read-only
+   * (`--read-only`). Pair with `tmpfs` to keep necessary scratch space.
+   *
+   * Added by the multi-repo coordinator fork (ADR 0021) for hardening.
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * tmpfs mounts inside the container. Each entry is the raw docker `--tmpfs`
+   * argument value (e.g. `"/tmp:rw,size=512m"`).
+   *
+   * Added by the multi-repo coordinator fork (ADR 0021) for hardening.
+   */
+  readonly tmpfs?: readonly string[];
 }
 
 /**
@@ -143,6 +176,10 @@ export const docker = (options?: DockerOptions): SandboxProvider => {
             user: `${containerUid}:${containerGid}`,
             network: options?.network,
             selinuxLabel,
+            memory: options?.memory,
+            cpus: options?.cpus,
+            readOnly: options?.readOnly,
+            tmpfs: options?.tmpfs,
           },
         ),
       );

@@ -87,6 +87,14 @@ export interface StartContainerOptions {
    * - `false` — disable labeling entirely.
    */
   readonly selinuxLabel?: SelinuxLabel;
+  /** Memory limit (`--memory <value>`), e.g. `"4g"`. */
+  readonly memory?: string;
+  /** CPU quota (`--cpus <value>`), e.g. `2` or `0.5`. */
+  readonly cpus?: number;
+  /** When true, mounts the rootfs read-only (`--read-only`). */
+  readonly readOnly?: boolean;
+  /** tmpfs mounts (each entry passed as `--tmpfs <value>`). */
+  readonly tmpfs?: readonly string[];
 }
 
 /**
@@ -137,6 +145,12 @@ export const startContainer = (
       : [];
     const networkFlags = networks.flatMap((n) => ["--network", n]);
 
+    const memoryFlags = options?.memory ? ["--memory", options.memory] : [];
+    const cpusFlags =
+      typeof options?.cpus === "number" ? ["--cpus", String(options.cpus)] : [];
+    const readOnlyFlags = options?.readOnly ? ["--read-only"] : [];
+    const tmpfsFlags = (options?.tmpfs ?? []).flatMap((t) => ["--tmpfs", t]);
+
     yield* dockerExec([
       "run",
       "-d",
@@ -147,6 +161,10 @@ export const startContainer = (
       ...workdirFlags,
       ...userFlags,
       ...networkFlags,
+      ...memoryFlags,
+      ...cpusFlags,
+      ...readOnlyFlags,
+      ...tmpfsFlags,
       imageName,
     ]);
   });

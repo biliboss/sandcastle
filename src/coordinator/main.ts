@@ -11,6 +11,10 @@ import { readFile, access } from "node:fs/promises";
 import { join } from "node:path";
 import { createGhFetchGraphQL } from "./ghFetchGraphQL.js";
 import { runInitCommand } from "./initCommand.js";
+import {
+  runBuildImageCommand,
+  AGENT_BASE_IMAGE_TAG,
+} from "./buildImageCommand.js";
 import { runStartLoop, realSleep } from "./startCommand.js";
 import { createProjectPoll } from "./ProjectPoll.js";
 import { createClaimItem } from "./claimItem.js";
@@ -19,6 +23,8 @@ import { createResultAggregator } from "./ResultAggregator.js";
 import { createAgentRegistry } from "./AgentRegistry.js";
 import { createCoordinator } from "./Coordinator.js";
 import { createRepoCache } from "./RepoCache.js";
+import { ensureAgentNetwork } from "./agentNetwork.js";
+import { createGhOpenPR } from "./openPR.js";
 import { run } from "../run.js";
 
 interface Config {
@@ -69,7 +75,16 @@ const main = async (argv: string[]): Promise<void> => {
       );
       return;
     }
+    case "build-image": {
+      const here = new URL(".", import.meta.url).pathname;
+      await runBuildImageCommand({
+        dockerfileDir: join(here, "docker"),
+      });
+      console.log(`built image ${AGENT_BASE_IMAGE_TAG}`);
+      return;
+    }
     case "start": {
+      await ensureAgentNetwork();
       const config = await loadConfig(cwd);
       const profilesPath = await resolveProfilesPath(cwd);
       const { profiles, defaultProfiles } = (await import(profilesPath)) as {
@@ -102,6 +117,7 @@ const main = async (argv: string[]): Promise<void> => {
       const dispatcher = createDispatcher({
         repoCache,
         sandcastleRun: (args) => run(args as any) as any,
+        openPR: createGhOpenPR(),
         sessionDir: join(process.env.HOME ?? cwd, ".coordinator/sessions"),
       });
       const aggregator = createResultAggregator({
@@ -137,7 +153,7 @@ const main = async (argv: string[]): Promise<void> => {
       return;
     }
     default:
-      console.error("Usage: coordinator <init|start> [args]");
+      console.error("Usage: coordinator <init|build-image|start> [args]");
       process.exit(2);
   }
 };

@@ -280,6 +280,49 @@ describe("docker()", () => {
     await handle.close();
   });
 
+  it("passes hardening flags memory, cpus, --read-only, --tmpfs to docker run", async () => {
+    mockExecFile.mockImplementation((_command, _args, ...rest: any[]) => {
+      const callback = rest[rest.length - 1];
+      callback(null, "", "");
+      return undefined as any;
+    });
+
+    const provider = docker({
+      memory: "4g",
+      cpus: 2,
+      readOnly: true,
+      tmpfs: ["/tmp:rw,size=512m", "/home/agent/.cache:rw,size=512m"],
+    });
+    const handle = await provider.create({
+      worktreePath: "/tmp/worktree",
+      hostRepoPath: "/tmp/repo",
+      mounts: [
+        { hostPath: "/tmp/worktree", sandboxPath: "/home/agent/workspace" },
+      ],
+      env: {},
+    });
+
+    const runCall = mockExecFile.mock.calls.find(
+      ([, args]) => Array.isArray(args) && args[0] === "run",
+    );
+    const runArgs = runCall![1] as string[];
+    expect(runArgs).toContain("--memory");
+    expect(runArgs[runArgs.indexOf("--memory") + 1]).toBe("4g");
+    expect(runArgs).toContain("--cpus");
+    expect(runArgs[runArgs.indexOf("--cpus") + 1]).toBe("2");
+    expect(runArgs).toContain("--read-only");
+    const tmpfsArgs = runArgs.reduce<string[]>((acc, a, i) => {
+      if (a === "--tmpfs") acc.push(runArgs[i + 1]!);
+      return acc;
+    }, []);
+    expect(tmpfsArgs).toEqual([
+      "/tmp:rw,size=512m",
+      "/home/agent/.cache:rw,size=512m",
+    ]);
+
+    await handle.close();
+  });
+
   it("uses containerUid/containerGid for --user flag when provided", async () => {
     mockExecFile.mockImplementation((_command, _args, ...rest: any[]) => {
       const callback = rest[rest.length - 1];

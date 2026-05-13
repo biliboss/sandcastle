@@ -54,6 +54,63 @@ describe("createDispatcher.dispatch", () => {
     expect(result.error).toBeUndefined();
   });
 
+  it("opens a PR after a successful run and records the URL on the result", async () => {
+    const ensureFresh = vi.fn().mockResolvedValue("/cache/o__r");
+    const sandcastleRun = vi
+      .fn()
+      .mockResolvedValue({ iterations: [], output: "" });
+    const openPR = vi.fn().mockResolvedValue("https://github.com/o/r/pull/99");
+
+    const profile: AgentProfile = {
+      agent: claudeCode("claude-opus-4-7"),
+      sandbox: () => noSandbox(),
+      branchStrategy: { type: "branch", branch: "coordinator/${itemId}" },
+    };
+    const dispatcher = createDispatcher({
+      repoCache: { ensureFresh },
+      sandcastleRun,
+      openPR,
+      sessionDir: "/sessions",
+    });
+
+    const result = await dispatcher.dispatch(
+      stubEvent({
+        itemId: "PVTI_xyz",
+        issue: { repo: "o/r", number: 7, title: "t", body: "b" },
+      }),
+      profile,
+    );
+
+    expect(openPR).toHaveBeenCalledOnce();
+    expect(openPR.mock.calls[0]![0]).toMatchObject({
+      repo: "o/r",
+      head: "coordinator/PVTI_xyz",
+      issueNumber: 7,
+    });
+    expect(result.prUrl).toBe("https://github.com/o/r/pull/99");
+  });
+
+  it("does not open a PR when the run errored", async () => {
+    const ensureFresh = vi.fn().mockResolvedValue("/cache/o__r");
+    const sandcastleRun = vi.fn().mockRejectedValue(new Error("agent timeout"));
+    const openPR = vi.fn();
+    const dispatcher = createDispatcher({
+      repoCache: { ensureFresh },
+      sandcastleRun,
+      openPR,
+      sessionDir: "/sessions",
+    });
+    const result = await dispatcher.dispatch(
+      stubEvent({
+        issue: { repo: "o/r", number: 1, title: "t", body: "b" },
+      }),
+      stubProfile(),
+    );
+    expect(openPR).not.toHaveBeenCalled();
+    expect(result.prUrl).toBeUndefined();
+    expect(result.error).toBeDefined();
+  });
+
   it("captures errors instead of throwing", async () => {
     const ensureFresh = vi.fn().mockResolvedValue("/cache/o__r.git");
     const sandcastleRun = vi.fn().mockRejectedValue(new Error("agent timeout"));
@@ -70,6 +127,34 @@ describe("createDispatcher.dispatch", () => {
     );
     expect(result.error?.message).toBe("agent timeout");
     expect(result.prUrl).toBeUndefined();
+  });
+
+  it("substitutes ${itemId} in branchStrategy.branch before invoking run()", async () => {
+    const ensureFresh = vi.fn().mockResolvedValue("/cache/o__r.git");
+    const sandcastleRun = vi
+      .fn()
+      .mockResolvedValue({ iterations: [], output: "" });
+    const profile: AgentProfile = {
+      agent: claudeCode("claude-opus-4-7"),
+      sandbox: () => noSandbox(),
+      branchStrategy: { type: "branch", branch: "coordinator/${itemId}" },
+    };
+    const dispatcher = createDispatcher({
+      repoCache: { ensureFresh },
+      sandcastleRun,
+      sessionDir: "/sessions",
+    });
+    await dispatcher.dispatch(
+      stubEvent({
+        itemId: "PVTI_xyz",
+        issue: { repo: "o/r", number: 1, title: "t", body: "b" },
+      }),
+      profile,
+    );
+    expect(sandcastleRun.mock.calls[0]![0].branchStrategy).toEqual({
+      type: "branch",
+      branch: "coordinator/PVTI_xyz",
+    });
   });
 
   it("passes profile env into run() when supplied", async () => {
