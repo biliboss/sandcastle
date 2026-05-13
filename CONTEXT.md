@@ -233,8 +233,28 @@ An atomic status transition on a **work item** (CAS via GraphQL) that marks it a
 _Avoid_: "lock", "reserve"
 
 **Repo cache**:
-A host-side directory of bare clones (`~/.orchestrator/repos/<owner>__<name>.git`) that the **coordinator** maintains. `sandcastle.run()` carves worktrees off the cache rather than cloning per dispatch.
+A host-side directory of working clones (`~/src/factory/<name>/`) that the **coordinator** maintains. `sandcastle.run()` carves worktrees off the cache rather than cloning per dispatch.
 _Avoid_: "mirror", "workspace"
+
+**Factory workspace**:
+The `~/src/factory/` directory — the host-side root the **coordinator** operates from. Holds the **coordinator** code itself (`./sandcastle/`), the **repo cache** as flat `<name>/` directories, and the **worktree namespace** at `.worktrees/<repo>/<branch>/`. Repo-agnostic: humans run `coordinator` from here and never `cd` into individual repos.
+_Avoid_: "workspace" (overloaded), "wt-root"
+
+**Agent base image**:
+The single Docker image (`coordinator/agent-base`) used by **every** dispatch. Lean by design (git, node, claudeCode, ripgrep, fd, jq). Built locally via `coordinator build-image`. Repos that need extra toolchain ship a per-repo **setup hook**.
+_Avoid_: "sandbox image" (Sandcastle's per-repo `sandcastle:<repo>` is different), "base"
+
+**Setup hook**:
+An executable script at `.coordinator/setup.sh` in a **target repo**. If present, the **agent base image** runs it as the agent user before invoking Claude. Lets a repo install its language toolchain into the container's writable scratch tmpfs without bloating the base image.
+_Avoid_: "init script", "entrypoint" (Docker has its own ENTRYPOINT semantics)
+
+**Credential set**:
+A long-lived authentication token produced by `claude setup-token`, scoped to one `CLAUDE_CONFIG_DIR` identity (e.g. `claude-pessoal`, `claude-mukutu`). Stored in `.coordinator/.env.<alias>`, injected as env into the **agent**'s container at dispatch. Each **agent profile** pins one **credential set**.
+_Avoid_: "token", "API key" (a credential set is OAuth-derived, not API-key)
+
+**Agent network**:
+The Docker bridge network (`agent-net`) all **agent** containers attach to. ICC-disabled — sibling agents cannot reach each other. Outbound internet is open for now; an egress allowlist via a sibling **coordinator-proxy** container is a planned follow-up.
+_Avoid_: "sandbox network" (would conflict with **sandbox** as our isolation concept)
 
 ## Relationships
 

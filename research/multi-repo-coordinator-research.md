@@ -508,7 +508,36 @@ Log noise: agent stream is verbose. Two views:
 
 ---
 
-## 10 Glossary
+## 10 Grill session — 2026-05-13 (OrbStack sandbox topology)
+
+Live smoke test against project 16 surfaced gaps in the original design. The OrbStack-based agent sandbox spec was grilled against existing primitives. Decisions reached:
+
+| Q                  | Decision                                                                                                                                                                                                                                                                                         | ADR                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| Sandcastle vs spec | The spec is **image + mount topology consumed BY Sandcastle's `docker()` provider**, not a parallel runner. Sandcastle keeps lifecycle, streaming, idle timeout, worktree management.                                                                                                            | 0018                                       |
+| Image scope        | Lean `coordinator/agent-base` (git, node, claudeCode, ripgrep, fd, jq). Per-repo `.coordinator/setup.sh` for extra toolchain.                                                                                                                                                                    | 0019                                       |
+| Auth               | One **credential set** per **agent profile**. Long-lived tokens via `claude setup-token` per `CLAUDE_CONFIG_DIR`, written to `.coordinator/.env.<alias>`, injected as container env. `~/.claude-pessoal` `:ro` mount **does NOT carry OAuth** — macOS Keychain holds it, unreachable from Linux. | 0020                                       |
+| Hardening flags    | Sandcastle's `DockerOptions` lacks `memory`/`cpus`/`readOnly`/`tmpfs`. Patch the fork directly — this fork is a product, not an upstream-clean PR.                                                                                                                                               | 0021                                       |
+| Network policy     | `agent-net` bridge with `enable_icc=false`. Squid egress allowlist deferred to a follow-up ADR (likely 0023).                                                                                                                                                                                    | 0022                                       |
+| Worktree location  | `~/src/factory/.worktrees/<repo>/<branch>/`. Repo cache flat at `~/src/factory/<repo>/`.                                                                                                                                                                                                         | — (CONTEXT.md term: **Factory workspace**) |
+| Branch strategy    | Both research and dev profiles use `branch` strategy with name `coordinator/<itemId>`. Symmetric and reviewable as PR.                                                                                                                                                                           | —                                          |
+| Image distribution | `coordinator build-image` subcommand. Builds locally from `src/coordinator/docker/Dockerfile`. No registry.                                                                                                                                                                                      | —                                          |
+| Coordinator host   | `coordinator start` runs as a host process (not containerised).                                                                                                                                                                                                                                  | —                                          |
+| Research output    | A PR with markdown doc on the `coordinator/<itemId>` branch. Reviewer reads via the standard PR UI.                                                                                                                                                                                              | —                                          |
+| Post-merge cleanup | Auto-cleanup via PR-merge webhook (reuses pr-cleanup-merged skill pattern).                                                                                                                                                                                                                      | — (impl follow-up)                         |
+
+### Findings from the smoke test
+
+- Project 16's ItemPoll returned zero items before the pagination fix — `first: 100` silently capped at the API ceiling. Fixed in `5a1ec79` by paging on `pageInfo.hasNextPage`.
+- `RepoCache` was cloning with `--bare`, then `sandcastle.run()` blew up because the working tree was absent. Flipped to a regular clone with the flat layout `<cacheDir>/<name>` per user request.
+- `ResultAggregator` crashed when `sessionFieldId` was empty (the project doesn't yet have a `Sandcastle Session` text field). Guarded the write.
+- `sandcastle.run()` with `noSandbox()` produced `handle.copyIn is not a function`. The `noSandbox` provider is documented as `interactive()`-only; the coordinator must use a bind-mount provider (Docker).
+- `docker()` with the default image name (`sandcastle:<repo>`) failed because `mukutu-skills` has no Dockerfile. This is the original motivation for ADR 0018.
+- macOS Keychain (`Claude Code-credentials-<hash>`) holds OAuth refresh tokens for each `CLAUDE_CONFIG_DIR`. Linux containers cannot read these. The `:ro` mount of `~/.claude-pessoal/` carries `settings.json` and skill configs but not auth — hence ADR 0020.
+
+---
+
+## 11 Glossary
 
 - **AFK agent**: an AI coding agent the human leaves running unattended.
 - **Bind-mount sandbox**: Sandcastle provider where host FS is mounted into the sandbox (Docker, Podman).
