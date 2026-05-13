@@ -23,6 +23,7 @@ import { startSse } from "./stream.js";
 import { fetchInfo, sendPrompt } from "./actions.js";
 import { pollRemaining, ringOffset } from "./stats.js";
 import { classifyError } from "./classifyError.js";
+import { groupErrors } from "./errorGrouping.js";
 import { renderEventLine } from "./eventLine.js";
 import { pipelineHtml } from "./pipeline.js";
 import { fmtTime, fmtElapsed, fmtUptime, escape } from "./util.js";
@@ -37,6 +38,7 @@ document.addEventListener("alpine:init", () => {
     escape,
   }));
   Alpine.magic("classify", () => classifyError);
+  Alpine.magic("groupErrors", () => groupErrors);
   Alpine.magic("eventLine", () => renderEventLine);
   Alpine.magic("pipeline", () => pipelineHtml);
   Alpine.magic("poll", () => ({ remaining: pollRemaining, ringOffset }));

@@ -191,39 +191,42 @@
           <template x-if="$store.coord.completed.length === 0">
             <div class="empty">// no completed dispatches yet</div>
           </template>
-          <template x-for="item in $store.coord.completed" :key="item.itemId">
+          <template x-for="g in $groupErrors($store.coord.completed)" :key="g.item.itemId">
             <div class="recent-row"
                  x-data="{ expanded: false }"
                  :class="{
-                   err: item.state === 'error',
-                   ok:  item.state !== 'error',
+                   err: g.item.state === 'error',
+                   ok:  g.item.state !== 'error',
                    'err-expanded': expanded
                  }"
-                 @click="if (item.state === 'error') expanded = !expanded">
-              <span class="glyph" x-text="item.state === 'error' ? '✗' : '✓'"></span>
-              <span class="when" x-text="$fmt.time(item.lastTs)"></span>
-              <span class="phase" :class="item.phase || ''" x-text="(item.phase || '—').toUpperCase()"></span>
+                 @click="if (g.item.state === 'error') expanded = !expanded">
+              <span class="glyph" x-text="g.item.state === 'error' ? '✗' : '✓'"></span>
+              <span class="when" x-text="$fmt.time(g.item.lastTs)"></span>
+              <span class="phase" :class="g.item.phase || ''" x-text="(g.item.phase || '—').toUpperCase()"></span>
               <span class="title">
-                <span x-text="item.title || item.itemId"></span>
+                <span x-text="g.item.title || g.item.itemId"></span>
                 <span style="color: var(--text-dim)"
-                      x-text="' · ' + (item.repo || '—') + (item.issueNumber ? '#' + item.issueNumber : '')"></span>
+                      x-text="' · ' + (g.item.repo || '—') + (g.item.issueNumber ? '#' + g.item.issueNumber : '')"></span>
               </span>
               <span class="right">
-                <template x-if="item.error">
+                <template x-if="g.item.error">
                   <span>
-                    <span class="err-chip" :class="$classify(item.error).cls" x-text="$classify(item.error).kind"></span>
-                    <span style="color: var(--red)" x-text="item.error.slice(0, 80)"></span>
+                    <span class="err-chip" :class="$classify(g.item.error).cls" x-text="$classify(g.item.error).kind"></span>
+                    <template x-if="g.count > 1">
+                      <span class="err-count" x-text="'×' + g.count"></span>
+                    </template>
+                    <span style="color: var(--red)" x-text="g.item.error.slice(0, 80)"></span>
                   </span>
                 </template>
-                <template x-if="!item.error && item.prUrl">
-                  <a :href="item.prUrl" target="_blank" x-text="'PR ' + item.prUrl.split('/').pop()"></a>
+                <template x-if="!g.item.error && g.item.prUrl">
+                  <a :href="g.item.prUrl" target="_blank" x-text="'PR ' + g.item.prUrl.split('/').pop()"></a>
                 </template>
-                <template x-if="!item.error && !item.prUrl">
+                <template x-if="!g.item.error && !g.item.prUrl">
                   <span>—</span>
                 </template>
               </span>
-              <template x-if="item.error">
-                <div class="err-full" x-text="item.error"></div>
+              <template x-if="g.item.error">
+                <div class="err-full" x-text="g.item.error"></div>
               </template>
             </div>
           </template>

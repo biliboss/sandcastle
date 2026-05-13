@@ -85,6 +85,19 @@
 .err-chip.timeout     { color: #c77dff; }
 .err-chip.unknown     { color: var(--text-dim); }
 
+/* Count badge next to chip when groupErrors collapsed N>1 identical errors */
+.err-count {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 5px;
+  background: rgba(255, 92, 92, 0.18);
+  color: var(--red);
+  font-family: "VT323", monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  vertical-align: 1px;
+}
+
 /* Click-to-expand on errored rows */
 .recent-row.err-expanded { grid-template-columns: 8px 80px 90px 1fr; }
 .recent-row.err-expanded .right { display: none; }
