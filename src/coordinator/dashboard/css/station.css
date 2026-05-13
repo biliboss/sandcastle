@@ -39,6 +39,15 @@
   width: 4px; background: var(--red);
   box-shadow: 0 0 8px var(--red);
 }
+/* "stuck" — running but past the 2x p95 threshold for current phase */
+.station[data-state="stuck"]::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 4px; background: var(--red);
+  box-shadow: 0 0 12px var(--red);
+  animation: blink 0.9s steps(2) infinite;
+}
+.station[data-state="stuck"] .right .state { color: var(--red); }
+.station[data-state="stuck"] .right .elapsed { color: var(--red); text-shadow: 0 0 8px rgba(255, 95, 95, 0.4); }
 
 .station-body {
   grid-column: 2;

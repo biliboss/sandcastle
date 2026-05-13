@@ -23,6 +23,7 @@
  */
 
 import { TICK_HISTORY_MAX } from "./config.js";
+import { collectPhaseDurations, computeP95 } from "./adaptiveTimeout.js";
 
 export function buildStore() {
   return {
@@ -132,6 +133,18 @@ export function buildStore() {
     },
     get recentTicks() {
       return this.tickHistory.slice(-TICK_HISTORY_MAX);
+    },
+
+    /** Per-phase p95 thresholds in ms, derived from the event log. Phases
+     *  with no samples are omitted (cold-start safety — stuck.js falls back
+     *  to "not stuck" rather than guessing a threshold). */
+    get phaseThresholds() {
+      const p95 = computeP95(collectPhaseDurations(this.events));
+      const out = new Map();
+      for (const [phase, ms] of p95) {
+        if (ms !== null) out.set(phase, ms);
+      }
+      return out;
     },
   };
 }

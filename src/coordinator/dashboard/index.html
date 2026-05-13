@@ -125,7 +125,8 @@
             <div class="empty">// no agents currently dispatching · waiting for project board signal</div>
           </template>
           <template x-for="item in $store.coord.active" :key="item.itemId">
-            <div class="station" :data-state="item.state">
+            <div class="station"
+                 :data-state="$isStuck(item, $store.coord.phaseThresholds, $store.coord.now) ? 'stuck' : item.state">
               <div class="station-body">
                 <div class="ident">
                   <span class="agent" x-text="item.profile || '—'"></span>
@@ -159,7 +160,12 @@
                        :class="{ err: item.state === 'error' }"
                        x-text="$fmt.elapsed($store.coord.now - new Date(item.firstTs).getTime())"></div>
                   <div class="state"
-                       x-text="item.state === 'ok' ? 'DONE' : item.state === 'error' ? 'ERROR' : 'RUNNING'"></div>
+                       x-text="
+                         item.state === 'ok' ? 'DONE' :
+                         item.state === 'error' ? 'ERROR' :
+                         $isStuck(item, $store.coord.phaseThresholds, $store.coord.now) ? 'STUCK' :
+                         'RUNNING'
+                       "></div>
                 </div>
               </div>
               <details>
