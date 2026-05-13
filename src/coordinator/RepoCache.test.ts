@@ -7,12 +7,11 @@ import { createRepoCache } from "./RepoCache.js";
 import type { GitRunner } from "./RepoCache.js";
 
 describe("createRepoCache.ensureFresh", () => {
-  it("clones the bare repo on first call into <cacheDir>/<owner>__<name>.git", async () => {
+  it("clones into <cacheDir>/<name> (flat, working tree) on first call", async () => {
     const cacheDir = await mkdtemp(join(tmpdir(), "repocache-"));
     const calls: Array<readonly string[]> = [];
     const git: GitRunner = vi.fn(async (args) => {
       calls.push(args);
-      // Simulate the clone by creating the target dir (last `.git` arg).
       if (args[0] === "clone") {
         const target = args[args.length - 1];
         if (target) await mkdir(target, { recursive: true });
@@ -23,19 +22,18 @@ describe("createRepoCache.ensureFresh", () => {
     const cache = createRepoCache({ cacheDir, git });
     const path = await cache.ensureFresh("mktvirtual/muki-bot");
 
-    expect(path).toBe(join(cacheDir, "mktvirtual__muki-bot.git"));
+    expect(path).toBe(join(cacheDir, "muki-bot"));
     expect(existsSync(path)).toBe(true);
     expect(calls[0]).toEqual([
       "clone",
-      "--bare",
       "https://github.com/mktvirtual/muki-bot.git",
-      join(cacheDir, "mktvirtual__muki-bot.git"),
+      join(cacheDir, "muki-bot"),
     ]);
   });
 
-  it("runs `git fetch --prune` when the cache already exists", async () => {
+  it("runs `git fetch --prune` when the clone already exists", async () => {
     const cacheDir = await mkdtemp(join(tmpdir(), "repocache-"));
-    const target = join(cacheDir, "o__r.git");
+    const target = join(cacheDir, "r");
     await mkdir(target, { recursive: true });
 
     const calls: Array<readonly string[]> = [];

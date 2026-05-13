@@ -1,9 +1,15 @@
 /**
- * RepoCache — host-side cache of bare git clones.
+ * RepoCache — host-side cache of regular (non-bare) git clones.
  *
- * The coordinator stores one bare repo per `owner/name` at
- * `<cacheDir>/<owner>__<name>.git`. `sandcastle.run()` carves worktrees off
- * the cache rather than cloning per dispatch.
+ * The coordinator stores one working clone per `owner/name` at
+ * `<cacheDir>/<owner>__<name>`. `sandcastle.run()` uses this as its `cwd`;
+ * Sandcastle's WorktreeManager handles branch strategy on top.
+ *
+ * Why not bare? `sandcastle.run()` expects a working tree (a git repo with a
+ * checked-out index it can carve worktrees off). A `--bare` clone has objects
+ * but no working tree, so `run({ cwd: <bare> })` fails. The trade-off is disk
+ * usage — but a working clone is still shared across runs via worktrees, so
+ * the cost is one checked-out tree per repo, not per dispatch.
  */
 
 import { existsSync } from "node:fs";
@@ -35,7 +41,7 @@ const defaultGit: GitRunner = async (args) => {
 };
 
 export interface RepoCache {
-  /** Ensure the bare clone for `repo` exists and is up-to-date. Returns its path. */
+  /** Ensure the working clone for `repo` exists and is up-to-date. Returns its path. */
   ensureFresh(repo: string): Promise<string>;
 }
 
@@ -44,7 +50,10 @@ const cachePathFor = (cacheDir: string, repo: string): string => {
   if (!owner || !name) {
     throw new Error(`Invalid repo "${repo}" — expected "owner/name"`);
   }
-  return join(cacheDir, `${owner}__${name}.git`);
+  // Flat layout: `<cacheDir>/<name>`. Two repos with the same name across
+  // different owners would collide — accept that limitation in exchange for
+  // a layout that humans can `cd` into without slug decoding.
+  return join(cacheDir, name);
 };
 
 export const createRepoCache = (deps: {
@@ -57,7 +66,7 @@ export const createRepoCache = (deps: {
       const path = cachePathFor(deps.cacheDir, repo);
       const args = existsSync(path)
         ? ["-C", path, "fetch", "--prune", "origin"]
-        : ["clone", "--bare", `https://github.com/${repo}.git`, path];
+        : ["clone", `https://github.com/${repo}.git`, path];
       const result = await git(args);
       if (result.exitCode !== 0) {
         throw new Error(

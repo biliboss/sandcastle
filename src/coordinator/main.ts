@@ -7,7 +7,7 @@
  * Both read/write `.coordinator/config.json` under the current cwd.
  */
 
-import { readFile } from "node:fs/promises";
+import { readFile, access } from "node:fs/promises";
 import { join } from "node:path";
 import { createGhFetchGraphQL } from "./ghFetchGraphQL.js";
 import { runInitCommand } from "./initCommand.js";
@@ -71,7 +71,7 @@ const main = async (argv: string[]): Promise<void> => {
     }
     case "start": {
       const config = await loadConfig(cwd);
-      const profilesPath = join(cwd, ".coordinator/profiles.js");
+      const profilesPath = await resolveProfilesPath(cwd);
       const { profiles, defaultProfiles } = (await import(profilesPath)) as {
         profiles: Parameters<typeof createAgentRegistry>[0]["profiles"];
         defaultProfiles: Parameters<
@@ -95,7 +95,9 @@ const main = async (argv: string[]): Promise<void> => {
         },
       });
       const repoCache = createRepoCache({
-        cacheDir: join(process.env.HOME ?? cwd, ".coordinator/repos"),
+        cacheDir:
+          process.env.COORDINATOR_REPO_DIR ??
+          join(process.env.HOME ?? cwd, "src/factory"),
       });
       const dispatcher = createDispatcher({
         repoCache,
@@ -138,6 +140,19 @@ const main = async (argv: string[]): Promise<void> => {
       console.error("Usage: coordinator <init|start> [args]");
       process.exit(2);
   }
+};
+
+const resolveProfilesPath = async (cwd: string): Promise<string> => {
+  for (const ext of [".ts", ".mts", ".js", ".mjs"]) {
+    const candidate = join(cwd, `.coordinator/profiles${ext}`);
+    try {
+      await access(candidate);
+      return candidate;
+    } catch {
+      continue;
+    }
+  }
+  throw new Error(`No .coordinator/profiles.{ts,mts,js,mjs} found in ${cwd}.`);
 };
 
 const resolveViewerLogin = async (

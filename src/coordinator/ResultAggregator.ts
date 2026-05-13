@@ -68,7 +68,7 @@ export const createResultAggregator = (deps: {
       : nextStatusOnSuccess(dispatchedFrom);
     const optionId = deps.config.statusOptionIds[target];
 
-    if (result.sessionPath) {
+    if (result.sessionPath && deps.config.sessionFieldId) {
       await deps.fetchGraphQL(SET_TEXT, {
         projectId: deps.config.projectNodeId,
         itemId: result.itemId,

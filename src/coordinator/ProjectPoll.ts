@@ -24,10 +24,10 @@ export interface ProjectPoll {
 }
 
 const ITEMS_QUERY = `
-  query($projectId: ID!) {
+  query($projectId: ID!, $after: String) {
     node(id: $projectId) {
       ... on ProjectV2 {
-        items(first: 100) {
+        items(first: 100, after: $after) {
           pageInfo { hasNextPage endCursor }
           nodes {
             id
@@ -81,32 +81,40 @@ export const createProjectPoll = (deps: {
   config: ProjectPollConfig;
 }): ProjectPoll => ({
   async fetchReadyItems(): Promise<WorkItemEvent[]> {
-    const data = await deps.fetchGraphQL(ITEMS_QUERY, {
-      projectId: deps.config.projectNodeId,
-    });
-    const nodes = data?.node?.items?.nodes ?? [];
     const events: WorkItemEvent[] = [];
-    for (const node of nodes) {
-      const status = findStatus(node.fieldValues, deps.config.statusFieldId);
-      if (!status) continue;
-      if (!TRIGGER_STATUSES.has(status)) continue;
-      const content = node.content;
-      if (content?.__typename !== "Issue") continue;
-      const labels: string[] =
-        content.labels?.nodes?.map((l: { name: string }) => l.name) ?? [];
-      const profileLabel = labels.find((n) => n.startsWith("agent-profile:"));
-      const agentProfile = profileLabel?.slice("agent-profile:".length);
-      events.push({
-        itemId: node.id,
-        status,
-        issue: {
-          repo: content.repository.nameWithOwner,
-          number: content.number,
-          title: content.title,
-          body: content.body,
-        },
-        ...(agentProfile ? { agentProfile } : {}),
+    let after: string | undefined;
+    while (true) {
+      const data = await deps.fetchGraphQL(ITEMS_QUERY, {
+        projectId: deps.config.projectNodeId,
+        ...(after ? { after } : {}),
       });
+      const items = data?.node?.items;
+      const nodes = items?.nodes ?? [];
+      for (const node of nodes) {
+        const status = findStatus(node.fieldValues, deps.config.statusFieldId);
+        if (!status) continue;
+        if (!TRIGGER_STATUSES.has(status)) continue;
+        const content = node.content;
+        if (content?.__typename !== "Issue") continue;
+        const labels: string[] =
+          content.labels?.nodes?.map((l: { name: string }) => l.name) ?? [];
+        const profileLabel = labels.find((n) => n.startsWith("agent-profile:"));
+        const agentProfile = profileLabel?.slice("agent-profile:".length);
+        events.push({
+          itemId: node.id,
+          status,
+          issue: {
+            repo: content.repository.nameWithOwner,
+            number: content.number,
+            title: content.title,
+            body: content.body,
+          },
+          ...(agentProfile ? { agentProfile } : {}),
+        });
+      }
+      if (!items?.pageInfo?.hasNextPage) break;
+      after = items.pageInfo.endCursor;
+      if (!after) break;
     }
     return events;
   },
