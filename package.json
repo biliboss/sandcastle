@@ -29,10 +29,15 @@
     "./sandboxes/no-sandbox": {
       "import": "./dist/sandboxes/no-sandbox.js",
       "types": "./dist/sandboxes/no-sandbox.d.ts"
+    },
+    "./orchestrator": {
+      "import": "./dist/orchestrator/index.js",
+      "types": "./dist/orchestrator/index.d.ts"
     }
   },
   "bin": {
-    "sandcastle": "dist/main.js"
+    "sandcastle": "dist/main.js",
+    "orchestrator": "dist/orchestrator/main.js"
   },
   "scripts": {
     "build": "tsgo --project tsconfig.build.json",

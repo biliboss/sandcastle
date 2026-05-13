@@ -200,6 +200,44 @@ _Avoid_: "stdout mode", "interactive mode", "CLI mode" (ambiguous with the CLI i
 A single item in the **agent**'s output stream -- either a `text` chunk or a `toolCall` -- surfaced to the caller of `run()` so the stream can be forwarded to an external observability system. Available only in **log-to-file mode** via the `onAgentStreamEvent` callback on the `logging` option. Each event carries its `iteration` number and a `timestamp`.
 _Avoid_: "log event" (the log file contains more than just agent output), "display entry" (internal UI type)
 
+### Orchestrator layer (multi-repo)
+
+**Orchestrator**:
+The layer above `run()` that drives Sandcastle across multiple repos from a single GitHub Project. Distinct from Sandcastle itself, which is per-repo.
+_Avoid_: "scheduler", "manager", "controller"
+
+**Project**:
+A GitHub Project (v2) board that holds work items from many repositories. The orchestrator's source of truth for what to do next.
+_Avoid_: "board", "kanban" (too UI-flavoured), "epic" (Jira-flavoured)
+
+**Work item**:
+A single row in a **project**, backed by a GitHub issue in some repo. Carries a status, a target repo, and optionally an **agent profile**.
+_Avoid_: "task", "ticket", "card"
+
+**Target repo**:
+The repository a **work item** acts on, read from the project's native `Repository` field. One work item = one target repo (multi-repo work is modelled as parent issue + N sub-issues, each with its own target repo).
+_Avoid_: "repo" (too short — collides with cache repo, fork repo, etc.)
+
+**Dispatch**:
+The act of consuming one **work item** and invoking `sandcastle.run()` for its **target repo**. One dispatch = one Sandcastle run session.
+_Avoid_: "trigger", "enqueue", "fire"
+
+**Agent profile**:
+A named bundle of `(agent provider, sandbox provider, branch strategy, env resolver)` selected per **work item** via the `Agent Profile` field. Lives in `.orchestrator/profiles.ts`.
+_Avoid_: "preset", "config", "agent config"
+
+**Coordinator**:
+The host process that polls a **project**, claims **work items** via CAS on the `Status` field, dispatches them, and writes results back. Stateless except for the project itself.
+_Avoid_: "daemon", "worker", "runner"
+
+**Claim**:
+An atomic status transition on a **work item** (CAS via GraphQL) that marks it as picked up by a **coordinator**. Prevents double-dispatch when multiple coordinators run in parallel.
+_Avoid_: "lock", "reserve"
+
+**Repo cache**:
+A host-side directory of bare clones (`~/.orchestrator/repos/<owner>__<name>.git`) that the **coordinator** maintains. `sandcastle.run()` carves worktrees off the cache rather than cloning per dispatch.
+_Avoid_: "mirror", "workspace"
+
 ## Relationships
 
 - **Sandcastle** orchestrates an **agent** inside a **sandbox**
