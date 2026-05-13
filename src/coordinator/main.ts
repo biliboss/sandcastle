@@ -25,7 +25,7 @@ import { createCoordinator } from "./Coordinator.js";
 import { createRepoCache } from "./RepoCache.js";
 import { ensureAgentNetwork } from "./agentNetwork.js";
 import { createGhOpenPR } from "./openPR.js";
-import { run } from "../run.js";
+import { createDockerRun } from "./dockerRun.js";
 
 interface Config {
   projectNumber: number;
@@ -114,11 +114,22 @@ const main = async (argv: string[]): Promise<void> => {
           process.env.COORDINATOR_REPO_DIR ??
           join(process.env.HOME ?? cwd, "src/factory"),
       });
+      // Bypass Sandcastle's docker provider — see dockerRun.ts header.
+      const dockerRunFn = createDockerRun({
+        image: process.env.COORDINATOR_IMAGE ?? "coordinator/agent-base",
+        network: process.env.COORDINATOR_NETWORK ?? "agent-net",
+        memory: process.env.COORDINATOR_MEMORY ?? "4g",
+        cpus: Number(process.env.COORDINATOR_CPUS ?? 2),
+        tmpfs: (process.env.COORDINATOR_TMPFS ?? "/tmp:rw,size=512m")
+          .split(",,")
+          .filter(Boolean),
+      });
       const dispatcher = createDispatcher({
         repoCache,
-        sandcastleRun: (args) => run(args as any) as any,
+        sandcastleRun: dockerRunFn,
         openPR: createGhOpenPR(),
         sessionDir: join(process.env.HOME ?? cwd, ".coordinator/sessions"),
+        worktreeBaseDir: process.env.COORDINATOR_WORKTREE_DIR,
       });
       const aggregator = createResultAggregator({
         fetchGraphQL,

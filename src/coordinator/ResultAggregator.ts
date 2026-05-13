@@ -67,6 +67,13 @@ export const createResultAggregator = (deps: {
       ? rollbackStatus(dispatchedFrom)
       : nextStatusOnSuccess(dispatchedFrom);
     const optionId = deps.config.statusOptionIds[target];
+    if (!optionId) {
+      throw new Error(
+        `Aggregator: no statusOptionId for "${target}" (dispatchedFrom=${dispatchedFrom}, hasError=${!!result.error}). Available keys: ${Object.keys(
+          deps.config.statusOptionIds,
+        ).join(", ")}`,
+      );
+    }
 
     if (result.sessionPath && deps.config.sessionFieldId) {
       await deps.fetchGraphQL(SET_TEXT, {
@@ -76,6 +83,9 @@ export const createResultAggregator = (deps: {
         text: result.sessionPath,
       });
     }
+    console.log(
+      `[aggregator] flipping ${result.itemId} → ${target} (optionId=${optionId})`,
+    );
     await deps.fetchGraphQL(SET_OPTION, {
       projectId: deps.config.projectNodeId,
       itemId: result.itemId,

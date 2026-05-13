@@ -40,7 +40,10 @@ export const createGhFetchGraphQL = (deps?: {
   return async (query, variables) => {
     const args: string[] = ["api", "graphql", "-f", `query=${query}`];
     for (const [k, v] of Object.entries(variables ?? {})) {
-      args.push("-F", `${k}=${String(v)}`);
+      // Use `-f` (forced string) instead of `-F` (auto-typed). `-F` parses
+      // all-digit values as Int, but GraphQL Variables can require `String!`
+      // (e.g. ProjectV2 option IDs are hex/digit strings).
+      args.push("-f", `${k}=${String(v)}`);
     }
     const { stdout, stderr, exitCode } = await spawn("gh", args);
     if (exitCode !== 0) {

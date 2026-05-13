@@ -47,7 +47,8 @@ describe("createDispatcher.dispatch", () => {
     const runArgs = sandcastleRun.mock.calls[0]![0];
     expect(runArgs.agent).toBe(profile.agent);
     expect(runArgs.cwd).toBe("/cache/mktvirtual__muki-bot.git");
-    expect(runArgs.prompt).toBe("Do something");
+    expect(runArgs.prompt).toContain("Do something");
+    expect(runArgs.prompt).toContain("git commit");
     expect(runArgs.branchStrategy).toEqual(profile.branchStrategy);
     expect(result.repo).toBe("mktvirtual/muki-bot");
     expect(result.itemId).toBe("PVTI_a");
@@ -60,6 +61,12 @@ describe("createDispatcher.dispatch", () => {
       .fn()
       .mockResolvedValue({ iterations: [], output: "" });
     const openPR = vi.fn().mockResolvedValue("https://github.com/o/r/pull/99");
+    const git = vi.fn(async (args: readonly string[]) => {
+      if (args.includes("rev-list")) {
+        return { stdout: "1\n", stderr: "", exitCode: 0 };
+      }
+      return { stdout: "", stderr: "", exitCode: 0 };
+    });
 
     const profile: AgentProfile = {
       agent: claudeCode("claude-opus-4-7"),
@@ -71,6 +78,8 @@ describe("createDispatcher.dispatch", () => {
       sandcastleRun,
       openPR,
       sessionDir: "/sessions",
+      worktreeBaseDir: "/tmp/wt-test",
+      git,
     });
 
     const result = await dispatcher.dispatch(
@@ -134,6 +143,11 @@ describe("createDispatcher.dispatch", () => {
     const sandcastleRun = vi
       .fn()
       .mockResolvedValue({ iterations: [], output: "" });
+    const git = vi.fn(async (args: readonly string[]) => {
+      if (args.includes("rev-list"))
+        return { stdout: "1\n", stderr: "", exitCode: 0 };
+      return { stdout: "", stderr: "", exitCode: 0 };
+    });
     const profile: AgentProfile = {
       agent: claudeCode("claude-opus-4-7"),
       sandbox: () => noSandbox(),
@@ -143,6 +157,8 @@ describe("createDispatcher.dispatch", () => {
       repoCache: { ensureFresh },
       sandcastleRun,
       sessionDir: "/sessions",
+      worktreeBaseDir: "/tmp/wt-test",
+      git,
     });
     await dispatcher.dispatch(
       stubEvent({

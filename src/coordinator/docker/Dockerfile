@@ -26,7 +26,10 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && rm -rf /var/lib/apt/lists/*
 
 # Create an `agent` user matching the host's UID/GID (overridable at build).
-RUN groupadd --gid "${AGENT_GID}" agent \
+# If the GID already exists (e.g. macOS host's GID 20 = staff), reuse it.
+RUN if ! getent group "${AGENT_GID}" >/dev/null; then \
+        groupadd --gid "${AGENT_GID}" agent; \
+    fi \
     && useradd --uid "${AGENT_UID}" --gid "${AGENT_GID}" --shell /bin/bash --create-home agent
 
 USER agent
