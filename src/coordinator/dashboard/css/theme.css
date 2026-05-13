@@ -1,0 +1,103 @@
+/*
+ * theme.css — design tokens + global page chrome.
+ *
+ * Owns: CSS variables (palette), global resets, body backdrop (grid + radial
+ * gradients), scanline + grain overlays, keyframes shared across modules,
+ * scrollbar + ::selection styling.
+ *
+ * Other CSS files import nothing from here — they just consume the variables
+ * declared on :root. Keep palette + animations centralized here so a theme
+ * tweak is a one-file change.
+ */
+
+:root {
+  color-scheme: dark;
+  --bg: #04060a;
+  --bg-soft: #060c12;
+  --panel: rgba(8, 16, 22, 0.65);
+  --grid: rgba(98, 255, 155, 0.035);
+  --hairline: rgba(98, 255, 155, 0.13);
+  --hairline-2: rgba(98, 255, 155, 0.28);
+  --rule: rgba(98, 255, 155, 0.55);
+  --phos: #62ff9b;
+  --phos-mid: #3a9c63;
+  --phos-dim: #1e5236;
+  --amber: #ffb84a;
+  --amber-mid: #6e4a18;
+  --red: #ff5f5f;
+  --magenta: #ff79c6;
+  --cyan: #5bf0ff;
+  --text: #b8ffd0;
+  --text-mid: #6c9d83;
+  --text-dim: #3e6450;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; min-height: 100vh; background: var(--bg); }
+
+body {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  background:
+    radial-gradient(ellipse 1100px 600px at 50% -5%, rgba(98, 255, 155, 0.06), transparent 60%),
+    radial-gradient(ellipse 700px 500px at 100% 100%, rgba(255, 121, 198, 0.025), transparent 70%),
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px),
+    var(--bg);
+  background-size: auto, auto, 22px 22px, 22px 22px, auto;
+  text-shadow: 0 0 1px rgba(98, 255, 155, 0.15);
+  position: relative;
+}
+
+/* CRT scanlines */
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 50;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0,0,0,0) 0,
+    rgba(0,0,0,0) 2px,
+    rgba(0,0,0,0.16) 2px,
+    rgba(0,0,0,0.16) 3px
+  );
+  mix-blend-mode: multiply;
+}
+/* Animated film grain */
+body::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 51;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.4 0 0 0 0 1 0 0 0 0 0.6 0 0 0 0.035 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  opacity: 0.55;
+  mix-blend-mode: screen;
+  animation: grain 1.4s steps(6) infinite;
+}
+
+@keyframes grain {
+  0%,100% { transform: translate(0,0); }
+  25% { transform: translate(-2%, 1%); }
+  50% { transform: translate(1%, -2%); }
+  75% { transform: translate(-1%, 2%); }
+}
+@keyframes blink { 50% { opacity: 0; } }
+@keyframes blinkSoft { 50% { opacity: 0.3; } }
+@keyframes scan {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+@keyframes spineRun {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* x-cloak: hide elements until Alpine has hydrated them. Alpine removes the
+ * attribute on init, which lets the element render. Without this rule,
+ * elements bound with `x-show`, `x-text`, or `x-html` would briefly render
+ * with their pre-Alpine state ("00:00:00", placeholder dashes, etc).
+ */
+[x-cloak] { display: none !important; }
+
+::selection { background: var(--phos); color: var(--bg); text-shadow: none; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--phos-dim); }
+::-webkit-scrollbar-thumb:hover { background: var(--phos-mid); }

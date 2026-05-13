@@ -29,6 +29,11 @@ import { createGhFetchComments } from "./fetchComments.js";
 import { createGhPostComment } from "./postComment.js";
 import { createApprovalFinalizer } from "./approvalFinalizer.js";
 import { createDockerRun } from "./dockerRun.js";
+import { createGhFetchDefaultBranch } from "./fetchDefaultBranch.js";
+import { createEventBus } from "./eventBus.js";
+import { runDashboardServer } from "./dashboardServer.js";
+import { createTmuxBridge, resolveTargetPane } from "./tmuxBridge.js";
+import { spawn } from "node:child_process";
 
 interface Config {
   projectNumber: number;
@@ -90,11 +95,16 @@ const main = async (argv: string[]): Promise<void> => {
       await ensureAgentNetwork();
       const config = await loadConfig(cwd);
       const profilesPath = await resolveProfilesPath(cwd);
-      const { profiles, defaultProfiles } = (await import(profilesPath)) as {
+      const { profiles, defaultProfiles, resolveProfile } = (await import(
+        profilesPath
+      )) as {
         profiles: Parameters<typeof createAgentRegistry>[0]["profiles"];
         defaultProfiles: Parameters<
           typeof createCoordinator
         >[0]["defaultProfiles"];
+        resolveProfile?: Parameters<
+          typeof createCoordinator
+        >[0]["resolveProfile"];
       };
 
       const poll = createProjectPoll({
@@ -124,14 +134,18 @@ const main = async (argv: string[]): Promise<void> => {
           .split(",,")
           .filter(Boolean),
       });
+      const bus = createEventBus(eventsFilePath(cwd));
+      const events = bus.sink;
       const dispatcher = createDispatcher({
         repoCache,
         sandcastleRun: dockerRunFn,
         openPR: createGhOpenPR(),
         fetchComments: createGhFetchComments(),
         postComment: createGhPostComment(),
+        fetchDefaultBranch: createGhFetchDefaultBranch(),
         sessionDir: join(process.env.HOME ?? cwd, ".coordinator/sessions"),
         worktreeBaseDir: process.env.COORDINATOR_WORKTREE_DIR,
+        events,
       });
       const aggregator = createResultAggregator({
         fetchGraphQL,
@@ -146,6 +160,7 @@ const main = async (argv: string[]): Promise<void> => {
       const finalizer = createApprovalFinalizer({
         cacheDirFor: (repo) => join(repoCacheDirRoot(cwd), repo.split("/")[1]!),
       });
+      const maxConcurrent = Number(process.env.COORDINATOR_MAX_CONCURRENT ?? 4);
       const coordinator = createCoordinator({
         poll,
         claim,
@@ -154,11 +169,68 @@ const main = async (argv: string[]): Promise<void> => {
         registry,
         defaultProfiles,
         finalizer,
+        events,
+        maxConcurrent,
+        ...(resolveProfile ? { resolveProfile } : {}),
       });
 
       const controller = new AbortController();
       process.on("SIGINT", () => controller.abort());
       process.on("SIGTERM", () => controller.abort());
+
+      // Embedded dashboard (on by default). `--no-dashboard` disables it
+      // entirely; `--dashboard-port` overrides the port; `--no-open` skips
+      // the auto-open behavior.
+      const dashboardEnabled = !rest.includes("--no-dashboard");
+      let dashboard: { close: () => Promise<void> } | undefined;
+      if (dashboardEnabled) {
+        const port = Number(
+          parseArg(rest, "--dashboard-port") ??
+            process.env.COORDINATOR_DASHBOARD_PORT ??
+            4747,
+        );
+        const host = parseArg(rest, "--dashboard-host") ?? "127.0.0.1";
+        const targetPane = resolveTargetPane(
+          parseArg(rest, "--tmux-target-pane"),
+          process.env,
+        );
+        const tmuxBridge = targetPane
+          ? createTmuxBridge({ targetPane })
+          : undefined;
+        if (tmuxBridge) {
+          console.log(
+            `[dashboard] tmux bridge → pane ${tmuxBridge.targetPane}`,
+          );
+        }
+        const handle = await runDashboardServer({
+          bus,
+          port,
+          host,
+          pollIntervalSec: config.pollIntervalSec,
+          ...(tmuxBridge ? { tmuxBridge, events: bus.sink } : {}),
+        });
+        dashboard = handle;
+        const noOpen = rest.includes("--no-open");
+        if (!noOpen) {
+          const opener =
+            process.platform === "darwin"
+              ? "open"
+              : process.platform === "win32"
+                ? "explorer"
+                : "xdg-open";
+          spawn(opener, [handle.url], {
+            stdio: "ignore",
+            detached: true,
+          }).unref();
+        }
+      }
+
+      const teardown = async () => {
+        controller.abort();
+        if (dashboard) await dashboard.close().catch(() => undefined);
+      };
+      process.on("SIGINT", teardown);
+      process.on("SIGTERM", teardown);
 
       await runStartLoop({
         coordinator,
@@ -170,10 +242,16 @@ const main = async (argv: string[]): Promise<void> => {
       return;
     }
     default:
-      console.error("Usage: coordinator <init|build-image|start> [args]");
+      console.error(
+        "Usage: coordinator <init|build-image|start> [--dashboard-port N] [--no-dashboard] [--no-open] [--tmux-target-pane %N]",
+      );
       process.exit(2);
   }
 };
+
+const eventsFilePath = (cwd: string): string =>
+  process.env.COORDINATOR_EVENTS_FILE ??
+  join(process.env.HOME ?? cwd, ".coordinator/events.jsonl");
 
 const repoCacheDirRoot = (cwd: string): string =>
   process.env.COORDINATOR_REPO_DIR ??

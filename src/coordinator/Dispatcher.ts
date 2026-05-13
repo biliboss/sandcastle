@@ -9,6 +9,8 @@
 
 import type { AgentProfile, DispatchResult, WorkItemEvent } from "./types.js";
 import type { GitRunner } from "./RepoCache.js";
+import type { EventSink } from "./events.js";
+import { nullSink } from "./events.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { join, basename } from "node:path";
@@ -37,11 +39,20 @@ export interface SandcastleRunArgs {
   readonly prompt: string;
   readonly branchStrategy: AgentProfile["branchStrategy"];
   readonly env?: Record<string, string>;
+  /**
+   * Host path mounted into the container as `CLAUDE_CONFIG_DIR`. The
+   * coordinator-owned docker runner bind-mounts this to
+   * `/home/agent/.claude`, which causes the agent's session jsonl to land
+   * on the host where the dashboard can tail it.
+   */
+  readonly sessionDir?: string;
 }
 
-export type SandcastleRunFn = (
-  args: SandcastleRunArgs,
-) => Promise<{ readonly output?: string }>;
+export type SandcastleRunFn = (args: SandcastleRunArgs) => Promise<{
+  readonly output?: string;
+  /** Host path to the agent session jsonl, if captured. */
+  readonly sessionPath?: string;
+}>;
 
 export interface OpenPRArgs {
   readonly repo: string;
@@ -64,6 +75,9 @@ export interface PostCommentArgs {
   readonly body: string;
 }
 export type PostCommentFn = (args: PostCommentArgs) => Promise<void>;
+
+/** Resolves the default branch (e.g. main, master, trunk) for a repo. */
+export type FetchDefaultBranchFn = (repo: string) => Promise<string>;
 
 export interface DispatcherDeps {
   readonly repoCache: { ensureFresh(repo: string): Promise<string> };
@@ -91,6 +105,14 @@ export interface DispatcherDeps {
   readonly worktreeBaseDir?: string;
   /** Injected git runner (tests); production uses execFile("git", ...). */
   readonly git?: GitRunner;
+  /** Optional event sink for live dashboard progress. */
+  readonly events?: EventSink;
+  /**
+   * Resolves a repo's default branch. Default falls back to "main", but
+   * some mktvirtual repos use "master" / other names — without this lookup
+   * `git clone --branch main` fails on those repos.
+   */
+  readonly fetchDefaultBranch?: FetchDefaultBranchFn;
 }
 
 export interface Dispatcher {
@@ -276,7 +298,19 @@ export const createDispatcher = (deps: DispatcherDeps): Dispatcher => ({
   async dispatch(event, profile) {
     const repo = event.issue.repo;
     const git = deps.git ?? defaultGit;
+    const sink = deps.events ?? nullSink;
+    const phase: "research" | "dev" = phaseFor(event.status);
+    const progress = (step: string, detail?: string) =>
+      sink.emit({
+        type: "dispatch.progress",
+        itemId: event.itemId,
+        repo,
+        phase,
+        step,
+        ...(detail ? { detail } : {}),
+      });
     try {
+      await progress("cache.ensure");
       const cacheDir = await deps.repoCache.ensureFresh(repo);
       const env = profile.env?.(repo);
       const phase = phaseFor(event.status);
@@ -311,7 +345,10 @@ export const createDispatcher = (deps: DispatcherDeps): Dispatcher => ({
         // a dev dispatch can branch off the research output (Q2 decision).
         await runGit(git, ["-C", cacheDir, "fetch", "origin"], "git fetch");
         const researchBranch = `coordinator/research/${event.itemId}`;
-        let cloneBranch = "main";
+        const defaultBranch =
+          (await deps.fetchDefaultBranch?.(repo).catch(() => undefined)) ??
+          "main";
+        let cloneBranch = defaultBranch;
         if (phase === "dev") {
           const lsRemote = await git([
             "ls-remote",
@@ -342,6 +379,7 @@ export const createDispatcher = (deps: DispatcherDeps): Dispatcher => ({
         // to an invalid `/workspace/.alt-objects` path. Plain clone uses
         // hardlinks within the same filesystem (cheap) and produces a
         // self-contained `.git` dir that travels into the container fine.
+        await progress("git.clone", `branch=${cloneBranch}`);
         await runGit(
           git,
           ["clone", "--branch", cloneBranch, cacheDir, cwd],
@@ -375,14 +413,27 @@ export const createDispatcher = (deps: DispatcherDeps): Dispatcher => ({
             .catch(() => [])
         : [];
       const wrappedPrompt = composePrompt(event, comments);
-      await deps.sandcastleRun({
+      await progress("agent.exec.start");
+      const sessionDir = sessionPathFor(deps.sessionDir, event.itemId, repo);
+      const runResult = await deps.sandcastleRun({
         agent: profile.agent,
         sandbox: profile.sandbox(),
         cwd,
         prompt: wrappedPrompt,
         branchStrategy: substituted,
         ...(env ? { env } : {}),
+        sessionDir,
       });
+      if (runResult.sessionPath) {
+        await sink.emit({
+          type: "agent.session",
+          itemId: event.itemId,
+          repo,
+          phase,
+          sessionPath: runResult.sessionPath,
+        });
+      }
+      await progress("agent.exec.done");
 
       // After the agent has run inside the worktree, decide what to ship.
       let prUrl: string | undefined;
@@ -403,12 +454,20 @@ export const createDispatcher = (deps: DispatcherDeps): Dispatcher => ({
             `agent produced no commits on ${branchName} — nothing to ship`,
           );
         }
+        await progress("git.push", `branch=${branchName} ahead=${ahead}`);
+        // Force-with-lease: coord/* branches are coord-owned + ephemeral. A
+        // prior aborted dispatch can leave commits on the remote branch that
+        // diverge from the fresh-cloned-from-main local history; reject is
+        // safe to overwrite. `--force-with-lease` is the cautious variant —
+        // refuses if the remote tip is unexpected (so we never clobber a
+        // concurrent dispatch).
         await runGit(
           git,
-          ["-C", cwd, "push", "-u", "origin", branchName],
+          ["-C", cwd, "push", "--force-with-lease", "-u", "origin", branchName],
           "git push",
         );
         if (deps.openPR) {
+          await progress("pr.open");
           prUrl = await deps.openPR({
             repo,
             head: branchName,

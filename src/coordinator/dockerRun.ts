@@ -19,6 +19,8 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { mkdirSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import type { SandcastleRunArgs, SandcastleRunFn } from "./Dispatcher.js";
 import type { DockerRunner } from "./buildImageCommand.js";
 
@@ -60,6 +62,7 @@ const buildRunArgs = (
   opts: DockerRunOptions,
   args: SandcastleRunArgs,
   containerName: string,
+  sessionDir: string | undefined,
 ): string[] => {
   const hostUid = process.getuid?.() ?? 1000;
   const hostGid = process.getgid?.() ?? 1000;
@@ -74,6 +77,14 @@ const buildRunArgs = (
     "-v",
     `${args.cwd}:/workspace:rw`,
   ];
+  if (sessionDir) {
+    // Per-dispatch CLAUDE_CONFIG_DIR mount. The container writes its session
+    // jsonl under `/home/agent/.claude/projects/-workspace/<sessionId>.jsonl`
+    // — that lands on the host at `<sessionDir>/projects/-workspace/...`,
+    // making the agent's turn-by-turn log visible to the dashboard.
+    runArgs.push("-v", `${sessionDir}:/home/agent/.claude:rw`);
+    runArgs.push("-e", "CLAUDE_CONFIG_DIR=/home/agent/.claude");
+  }
   for (const m of opts.extraMounts ?? []) runArgs.push("-v", m);
   for (const [k, v] of Object.entries(args.env ?? {})) {
     runArgs.push("-e", `${k}=${v}`);
@@ -100,7 +111,18 @@ export const createDockerRun = (opts: DockerRunOptions): SandcastleRunFn => {
   const namePrefix = opts.namePrefix ?? "coordinator-agent";
   return async (args) => {
     const containerName = newContainerName(namePrefix);
-    const run = await docker(buildRunArgs(opts, args, containerName));
+    const sessionId = randomUUID();
+    const sessionDir = args.sessionDir;
+    if (sessionDir) {
+      try {
+        mkdirSync(sessionDir, { recursive: true });
+      } catch {
+        // best-effort; the docker bind-mount will create it too on most engines.
+      }
+    }
+    const run = await docker(
+      buildRunArgs(opts, args, containerName, sessionDir),
+    );
     if (run.exitCode !== 0) {
       throw new Error(`docker run failed: ${run.stderr}`);
     }
@@ -149,6 +171,7 @@ export const createDockerRun = (opts: DockerRunOptions): SandcastleRunFn => {
           "--output-format",
           "text",
           "--dangerously-skip-permissions",
+          ...(sessionDir ? ["--session-id", sessionId] : []),
           args.prompt,
         ]),
       );
@@ -157,7 +180,17 @@ export const createDockerRun = (opts: DockerRunOptions): SandcastleRunFn => {
           `claude failed (exit ${agentExec.exitCode}): ${agentExec.stderr || agentExec.stdout}`,
         );
       }
-      return { output: agentExec.stdout };
+      // Claude Code encodes the cwd into the project dirname by replacing
+      // `/` with `-`. Container cwd is `/workspace`, so the encoded form is
+      // `-workspace`. The session jsonl lands at:
+      //   <sessionDir>/projects/-workspace/<sessionId>.jsonl
+      const sessionPath = sessionDir
+        ? `${sessionDir}/projects/-workspace/${sessionId}.jsonl`
+        : undefined;
+      return {
+        output: agentExec.stdout,
+        ...(sessionPath ? { sessionPath } : {}),
+      };
     } finally {
       await cleanup();
     }

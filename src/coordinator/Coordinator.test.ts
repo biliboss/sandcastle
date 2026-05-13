@@ -53,6 +53,7 @@ describe("createCoordinator.tick", () => {
       },
     });
     await coord.tick();
+    await coord.drain();
 
     expect(poll.fetchReadyItems).toHaveBeenCalledOnce();
     expect(claim.claim).toHaveBeenCalledWith("a", "Ready to-do", "Doing");
@@ -132,6 +133,7 @@ describe("createCoordinator.tick", () => {
       },
     });
     await coord.tick();
+    await coord.drain();
     expect(registry.get).toHaveBeenCalledWith("custom");
   });
 });

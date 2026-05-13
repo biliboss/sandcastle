@@ -1,0 +1,63 @@
+/*
+ * sections.css — main content canvas + section headers + empty-state slab.
+ *
+ * Owns: <main>, .section-head (the SEC-NN tag + title + count strip), and
+ * .empty (the dashed slate shown when a section has nothing to render).
+ */
+
+main {
+  position: relative; z-index: 4;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 22px 24px 80px;
+  display: grid; gap: 28px;
+}
+
+.section-head {
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 8px;
+}
+.section-head .tag {
+  font-family: "B612 Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--phos);
+  background: rgba(98,255,155,0.06);
+  border: 1px solid var(--phos-mid);
+  padding: 3px 9px;
+}
+.section-head .h {
+  font-family: "VT323", monospace;
+  font-size: 26px;
+  color: var(--text);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.section-head .count {
+  font-family: "VT323", monospace;
+  font-size: 22px;
+  color: var(--phos);
+  margin-left: auto;
+}
+.section-head .count.dim { color: var(--text-dim); }
+.section-head .rule {
+  flex: 1;
+  height: 1px;
+  background: var(--hairline);
+  margin: 0 8px;
+  align-self: center;
+}
+
+.empty {
+  padding: 30px 24px;
+  text-align: center;
+  color: var(--text-dim);
+  border: 1px dashed var(--hairline-2);
+  background:
+    repeating-linear-gradient(45deg, transparent, transparent 12px, rgba(98,255,155,0.022) 12px, rgba(98,255,155,0.022) 13px),
+    rgba(0,0,0,0.18);
+  font-family: "VT323", monospace;
+  font-size: 18px;
+  letter-spacing: 0.1em;
+}

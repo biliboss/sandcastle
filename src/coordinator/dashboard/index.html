@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>sandcastle // factory floor</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=VT323&family=B612+Mono:wght@400;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+
+    <!--
+      Stylesheets are split by visual region; load order is theme → header →
+      sections → station → recent → dock so cascading specificity stays
+      predictable. See ./README.md for the full layout map.
+    -->
+    <link rel="stylesheet" href="/static/css/theme.css" />
+    <link rel="stylesheet" href="/static/css/header.css" />
+    <link rel="stylesheet" href="/static/css/sections.css" />
+    <link rel="stylesheet" href="/static/css/station.css" />
+    <link rel="stylesheet" href="/static/css/recent.css" />
+    <link rel="stylesheet" href="/static/css/dock.css" />
+
+    <!-- Alpine.js v3: declarative reactivity, ~15KB, no build step. The
+         `defer` attribute is required so Alpine waits for the parser; our
+         own main.js (also defer'd via type=module) registers the store +
+         magics on the alpine:init event before Alpine walks the DOM. -->
+    <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js"></script>
+    <script type="module" src="/static/js/main.js"></script>
+  </head>
+
+  <!--
+    Root x-data binds the `dashboard` factory (see js/main.js). Children read
+    state from $store.coord and call helpers via $fmt / $classify / $eventLine
+    / $pipeline / $poll. No element id is consumed by JS in the Alpine path
+    except #connState, #ring, #cdNum, #tickStrip — those are written
+    imperatively in stream.js / templates because Alpine SVG attribute binding
+    is awkward for stroke-dashoffset arithmetic.
+  -->
+  <body x-data="dashboard" x-cloak>
+    <header class="console">
+      <div class="titlebar">
+        <span class="prompt">$</span>
+        <span>sandcastle</span><span class="at">@</span><span>coord</span>
+        <span class="at">:</span>
+        <span class="path">~/factory</span>
+        <span class="at">%</span>
+        <span class="cmd">watch agents</span>
+        <span class="cursor"></span>
+        <div class="right">
+          <span>UPTIME <b x-text="$fmt.uptime($store.coord.now - $store.coord.bootedAt)">00:00:00</b></span>
+          <span>CONN <b :style="{ color:
+            $store.coord.connState === 'open'  ? 'var(--phos)' :
+            $store.coord.connState === 'error' ? 'var(--red)'  : 'var(--text-mid)'
+          }">●</b></span>
+        </div>
+      </div>
+      <div class="console-rule">═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════</div>
+
+      <div class="panel-grid">
+        <div class="tile">
+          <div class="lbl">agents active</div>
+          <div class="v amb" x-text="String($store.coord.active.length).padStart(2,'0')">00</div>
+          <div class="sub">— dispatching</div>
+          <div class="scan"></div>
+        </div>
+        <div class="tile">
+          <div class="lbl">completed</div>
+          <div class="v" x-text="String($store.coord.okCount).padStart(2,'0')">00</div>
+          <div class="sub">— done in run</div>
+        </div>
+        <div class="tile">
+          <div class="lbl">errored</div>
+          <div class="v dim" x-text="String($store.coord.errored).padStart(2,'0')">00</div>
+          <div class="sub">— failed dispatches</div>
+        </div>
+        <div class="tile">
+          <div class="lbl">events received</div>
+          <div class="v dim" x-text="String($store.coord.events.length).padStart(3,'0')">000</div>
+          <div class="sub">— jsonl entries</div>
+        </div>
+        <div class="tile cd">
+          <div class="ticks-wrap" style="flex: 1; min-width: 0;">
+            <div class="lbl">tick history · next poll</div>
+            <div class="ticks">
+              <template x-for="(t, i) in $store.coord.recentTicks" :key="t.ts">
+                <div class="bar"
+                     :class="{
+                       last: i === $store.coord.recentTicks.length - 1,
+                       busy: t.busy
+                     }"
+                     :title="$fmt.time(t.ts) + (t.busy ? ' · busy' : '')"></div>
+              </template>
+            </div>
+            <div class="sub" style="margin-top: 4px;">
+              LAST <span style="color: var(--amber)" x-text="$store.coord.lastTickAt ? $fmt.time($store.coord.lastTickAt) : '--:--:--'">--:--:--</span>
+            </div>
+          </div>
+          <div class="countdown" title="next coordinator poll">
+            <svg viewBox="0 0 78 78">
+              <circle class="track"></circle>
+              <circle class="ring"
+                      :stroke-dashoffset="$poll.ringOffset($store.coord)"
+                      stroke-dashoffset="213.63"></circle>
+            </svg>
+            <div class="num"
+                 :class="{ due: ($poll.remaining($store.coord) ?? 99) < 1 }"
+                 x-text="$poll.remaining($store.coord) === null ? '--' : $poll.remaining($store.coord) + 's'">--</div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <!-- SEC-01 · in-flight stations -->
+      <section>
+        <div class="section-head">
+          <span class="tag">SEC-01</span>
+          <span class="h">agents · in flight</span>
+          <span class="rule"></span>
+          <span class="count" x-text="'[ ' + String($store.coord.active.length).padStart(2,'0') + ' ]'">[ 00 ]</span>
+        </div>
+        <div class="stations">
+          <template x-if="$store.coord.active.length === 0">
+            <div class="empty">// no agents currently dispatching · waiting for project board signal</div>
+          </template>
+          <template x-for="item in $store.coord.active" :key="item.itemId">
+            <div class="station" :data-state="item.state">
+              <div class="station-body">
+                <div class="ident">
+                  <span class="agent" x-text="item.profile || '—'"></span>
+                  <span class="phase" :class="item.phase || ''" x-text="(item.phase || '—').toUpperCase()"></span>
+                </div>
+                <div class="core">
+                  <div class="title" x-text="item.title || item.itemId"></div>
+                  <div class="meta">
+                    <span>
+                      <span class="k">REPO</span>
+                      <template x-if="issueHref(item)">
+                        <a :href="issueHref(item)" target="_blank"
+                           x-text="item.repo + '#' + item.issueNumber"></a>
+                      </template>
+                      <template x-if="!issueHref(item)">
+                        <span x-text="item.repo || '—'"></span>
+                      </template>
+                    </span>
+                    <span><span class="k">ID</span><span x-text="item.itemId.slice(0, 22) + '…'"></span></span>
+                    <template x-if="item.activeStep && item.state === 'running'">
+                      <span><span class="k">STEP</span><span style="color: var(--amber)" x-text="item.activeStep"></span></span>
+                    </template>
+                    <template x-if="item.prUrl">
+                      <span><span class="k">PR</span><a :href="item.prUrl" target="_blank" x-text="item.prUrl.split('/').pop()"></a></span>
+                    </template>
+                  </div>
+                  <div x-html="$pipeline(item)"></div>
+                </div>
+                <div class="right">
+                  <div class="elapsed"
+                       :class="{ err: item.state === 'error' }"
+                       x-text="$fmt.elapsed($store.coord.now - new Date(item.firstTs).getTime())"></div>
+                  <div class="state"
+                       x-text="item.state === 'ok' ? 'DONE' : item.state === 'error' ? 'ERROR' : 'RUNNING'"></div>
+                </div>
+              </div>
+              <details>
+                <summary>EVENT LOG <span class="count" x-text="item.events.length"></span></summary>
+                <div class="log">
+                  <template x-for="ev in item.events.slice().reverse()" :key="ev.ts + ':' + ev.type">
+                    <div class="log-line" :class="$eventLine(ev).kind">
+                      <span class="glyph" x-text="$eventLine(ev).glyph"></span>
+                      <span class="when" x-text="$fmt.time(ev.ts)"></span>
+                      <span class="what" x-html="$eventLine(ev).html"></span>
+                    </div>
+                  </template>
+                </div>
+              </details>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <!-- SEC-02 · recent completions -->
+      <section>
+        <div class="section-head">
+          <span class="tag" style="color: var(--cyan); border-color: var(--cyan); background: rgba(91,240,255,0.05);">SEC-02</span>
+          <span class="h">recent · completions</span>
+          <span class="rule"></span>
+          <span class="count dim" x-text="'[ ' + String($store.coord.completed.length).padStart(2,'0') + ' ]'">[ 00 ]</span>
+        </div>
+        <div class="recent">
+          <template x-if="$store.coord.completed.length === 0">
+            <div class="empty">// no completed dispatches yet</div>
+          </template>
+          <template x-for="item in $store.coord.completed" :key="item.itemId">
+            <div class="recent-row"
+                 x-data="{ expanded: false }"
+                 :class="{
+                   err: item.state === 'error',
+                   ok:  item.state !== 'error',
+                   'err-expanded': expanded
+                 }"
+                 @click="if (item.state === 'error') expanded = !expanded">
+              <span class="glyph" x-text="item.state === 'error' ? '✗' : '✓'"></span>
+              <span class="when" x-text="$fmt.time(item.lastTs)"></span>
+              <span class="phase" :class="item.phase || ''" x-text="(item.phase || '—').toUpperCase()"></span>
+              <span class="title">
+                <span x-text="item.title || item.itemId"></span>
+                <span style="color: var(--text-dim)"
+                      x-text="' · ' + (item.repo || '—') + (item.issueNumber ? '#' + item.issueNumber : '')"></span>
+              </span>
+              <span class="right">
+                <template x-if="item.error">
+                  <span>
+                    <span class="err-chip" :class="$classify(item.error).cls" x-text="$classify(item.error).kind"></span>
+                    <span style="color: var(--red)" x-text="item.error.slice(0, 80)"></span>
+                  </span>
+                </template>
+                <template x-if="!item.error && item.prUrl">
+                  <a :href="item.prUrl" target="_blank" x-text="'PR ' + item.prUrl.split('/').pop()"></a>
+                </template>
+                <template x-if="!item.error && !item.prUrl">
+                  <span>—</span>
+                </template>
+              </span>
+              <template x-if="item.error">
+                <div class="err-full" x-text="item.error"></div>
+              </template>
+            </div>
+          </template>
+        </div>
+      </section>
+    </main>
+
+    <!-- Tmux control plane: hidden until /info reports tmuxEnabled: true. -->
+    <div class="dock" x-show="$store.coord.tmux.enabled">
+      <span class="prompt-glyph">&gt;</span>
+      <span class="target">tmux <b x-text="$store.coord.tmux.target">—</b></span>
+      <input class="prompt-input" autocomplete="off" spellcheck="false"
+             placeholder="send keys to the claude pane · Enter to fire · Esc to clear"
+             @keydown.enter.prevent="onPromptEnter($event)"
+             @keydown.escape.prevent="$event.target.value = ''" />
+      <span class="hint" x-text="$store.coord.ack.hint">ready</span>
+    </div>
+
+    <div class="ack-toast"
+         :class="{
+           show: $store.coord.ack.toast.show,
+           err:  $store.coord.ack.toast.isErr
+         }"
+         x-text="$store.coord.ack.toast.msg"></div>
+
+    <footer class="bot">
+      <div class="live">stream /stream · sse live</div>
+      <div class="right">SANDCASTLE COORD <b>v0.5.10</b> · POLL <b x-text="$store.coord.pollIntervalSec ?? '--'">--</b>s · CTRL-C TO EXIT</div>
+    </footer>
+  </body>
+</html>

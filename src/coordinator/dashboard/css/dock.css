@@ -1,0 +1,85 @@
+/*
+ * dock.css — bottom prompt dock + ack toast + page footer.
+ *
+ * The dock is the tmux control-plane: it's hidden unless the server reports
+ * `tmuxEnabled: true` on /info. Submitting the input POSTs /act/prompt and the
+ * `.ack-toast` surfaces the resulting action.ack event. The footer.bot strip
+ * sits below the dock and just holds session-identity text.
+ */
+
+.dock {
+  position: fixed; left: 0; right: 0; bottom: 26px; z-index: 7;
+  padding: 8px 22px;
+  background: linear-gradient(0deg, rgba(4,6,10,0.95) 0%, rgba(4,6,10,0.85) 100%);
+  border-top: 1px solid var(--hairline);
+  display: flex; gap: 10px; align-items: center;
+  font-family: "B612 Mono", monospace;
+}
+.dock .prompt-glyph {
+  color: var(--amber);
+  font-family: "VT323", monospace;
+  font-size: 18px;
+  line-height: 1;
+  text-shadow: 0 0 6px rgba(255,176,0,0.4);
+}
+.dock .target {
+  color: var(--text-dim);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.dock .target b { color: var(--cyan); }
+.dock input.prompt-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: "B612 Mono", monospace;
+  font-size: 13px;
+  caret-color: var(--phos);
+}
+.dock input.prompt-input::placeholder { color: var(--text-dim); }
+.dock input.prompt-input:disabled { color: var(--text-dim); cursor: not-allowed; }
+.dock .hint {
+  color: var(--text-dim); font-size: 10.5px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+
+.ack-toast {
+  position: fixed; right: 22px; bottom: 80px; z-index: 8;
+  padding: 8px 14px;
+  background: rgba(8, 16, 22, 0.92);
+  border: 1px solid var(--phos-dim);
+  color: var(--phos);
+  font-family: "B612 Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  opacity: 0; transform: translateY(8px);
+  transition: opacity 180ms ease, transform 180ms ease;
+  pointer-events: none;
+  max-width: 480px;
+}
+.ack-toast.show { opacity: 1; transform: translateY(0); }
+.ack-toast.err { border-color: var(--red); color: var(--red); }
+
+footer.bot {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 6;
+  padding: 6px 22px;
+  font-family: "VT323", monospace;
+  font-size: 14px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: linear-gradient(0deg, var(--bg) 0%, rgba(4,6,10,0.85) 70%, transparent);
+  display: flex; justify-content: space-between; gap: 24px;
+  border-top: 1px solid var(--hairline);
+}
+footer.bot .live::before {
+  content: "●";
+  color: var(--phos);
+  margin-right: 6px;
+  text-shadow: 0 0 6px var(--phos);
+  animation: blink 1.8s steps(2) infinite;
+}
+footer.bot .right b { color: var(--phos-mid); }
