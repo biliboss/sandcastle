@@ -25,6 +25,9 @@ import { createCoordinator } from "./Coordinator.js";
 import { createRepoCache } from "./RepoCache.js";
 import { ensureAgentNetwork } from "./agentNetwork.js";
 import { createGhOpenPR } from "./openPR.js";
+import { createGhFetchComments } from "./fetchComments.js";
+import { createGhPostComment } from "./postComment.js";
+import { createApprovalFinalizer } from "./approvalFinalizer.js";
 import { createDockerRun } from "./dockerRun.js";
 
 interface Config {
@@ -109,11 +112,8 @@ const main = async (argv: string[]): Promise<void> => {
           statusOptionIds: config.statusOptionIds as any,
         },
       });
-      const repoCache = createRepoCache({
-        cacheDir:
-          process.env.COORDINATOR_REPO_DIR ??
-          join(process.env.HOME ?? cwd, "src/factory"),
-      });
+      const cacheRoot = repoCacheDirRoot(cwd);
+      const repoCache = createRepoCache({ cacheDir: cacheRoot });
       // Bypass Sandcastle's docker provider — see dockerRun.ts header.
       const dockerRunFn = createDockerRun({
         image: process.env.COORDINATOR_IMAGE ?? "coordinator/agent-base",
@@ -128,6 +128,8 @@ const main = async (argv: string[]): Promise<void> => {
         repoCache,
         sandcastleRun: dockerRunFn,
         openPR: createGhOpenPR(),
+        fetchComments: createGhFetchComments(),
+        postComment: createGhPostComment(),
         sessionDir: join(process.env.HOME ?? cwd, ".coordinator/sessions"),
         worktreeBaseDir: process.env.COORDINATOR_WORKTREE_DIR,
       });
@@ -141,6 +143,9 @@ const main = async (argv: string[]): Promise<void> => {
         },
       });
       const registry = createAgentRegistry({ profiles });
+      const finalizer = createApprovalFinalizer({
+        cacheDirFor: (repo) => join(repoCacheDirRoot(cwd), repo.split("/")[1]!),
+      });
       const coordinator = createCoordinator({
         poll,
         claim,
@@ -148,6 +153,7 @@ const main = async (argv: string[]): Promise<void> => {
         aggregator,
         registry,
         defaultProfiles,
+        finalizer,
       });
 
       const controller = new AbortController();
@@ -168,6 +174,10 @@ const main = async (argv: string[]): Promise<void> => {
       process.exit(2);
   }
 };
+
+const repoCacheDirRoot = (cwd: string): string =>
+  process.env.COORDINATOR_REPO_DIR ??
+  join(process.env.HOME ?? cwd, "src/factory");
 
 const resolveProfilesPath = async (cwd: string): Promise<string> => {
   for (const ext of [".ts", ".mts", ".js", ".mjs"]) {

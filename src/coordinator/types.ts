@@ -15,9 +15,10 @@ import type {
 /**
  * Status values matching the GitHub Project board.
  *
- * Two statuses trigger the coordinator:
- *   - "Ready to Research" → research dispatch
- *   - "Ready to-do" → dev dispatch
+ * Three statuses trigger the coordinator:
+ *   - "Ready to Research" → research dispatch (agent writes research doc)
+ *   - "Ready to-do" → dev dispatch (agent implements)
+ *   - "Approved" → finalize (squash-merge PR(s), cleanup, flip Done)
  *
  * All other statuses are either human-managed (Inbox, Ready for Review*) or
  * terminal (Done).
@@ -30,18 +31,24 @@ export type WorkItemStatus =
   | "Ready to-do"
   | "Doing"
   | "Ready for Review"
+  | "Approved"
   | "Done";
 
-/** Statuses that cause the coordinator to claim and dispatch an item. */
+/** Statuses that cause the coordinator to claim and act on an item. */
 export const TRIGGER_STATUSES: ReadonlySet<WorkItemStatus> = new Set([
   "Ready to Research",
   "Ready to-do",
+  "Approved",
 ]);
 
 /** Status the coordinator transitions an item to when claiming it. */
 export const CLAIM_TRANSITIONS: Record<string, WorkItemStatus> = {
   "Ready to Research": "Researching",
   "Ready to-do": "Doing",
+  // Approved is finalized deterministically — no intermediate "Finalizing"
+  // status (would multiply human-facing states with no real value). The
+  // coordinator goes Approved → Done in one step if everything merges.
+  Approved: "Done",
 };
 
 /**

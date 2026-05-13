@@ -28,12 +28,12 @@ describe("createGhFetchGraphQL", () => {
     expect(args).toContain("query=query { viewer { login } }");
     expect(args).toContain("foo=bar");
     expect(args).toContain("n=42");
-    // Variables passed with `-f` (forced string) — `-F` would auto-type
-    // all-digit values as Int and fail GraphQL `String!` typing.
+    // String values use `-f` (don't coerce all-digit strings to Int);
+    // number values use `-F` (preserve Int! typing).
     const fooIdx = args.indexOf("foo=bar");
     const nIdx = args.indexOf("n=42");
     expect(args[fooIdx - 1]).toBe("-f");
-    expect(args[nIdx - 1]).toBe("-f");
+    expect(args[nIdx - 1]).toBe("-F");
   });
 
   it("throws on non-zero exit", async () => {
