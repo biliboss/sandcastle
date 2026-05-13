@@ -1,5 +1,5 @@
 /**
- * `orchestrator start` — runs the coordinator tick loop until the host
+ * `coordinator start` — runs the coordinator tick loop until the host
  * process receives SIGINT.
  *
  * The sleep function is injected so tests can advance the loop without real

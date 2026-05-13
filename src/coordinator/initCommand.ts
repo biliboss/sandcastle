@@ -1,6 +1,6 @@
 /**
- * `orchestrator init` — resolves a GitHub Project's metadata (node id, field
- * ids, status option ids) and writes them to `.orchestrator/config.json`.
+ * `coordinator init` — resolves a GitHub Project's metadata (node id, field
+ * ids, status option ids) and writes them to `.coordinator/config.json`.
  *
  * Subsequent commands (`start`, `dispatch`, `resume`) read this file instead
  * of re-querying the GraphQL API.
@@ -73,7 +73,7 @@ export const runInitCommand = async (args: InitCommandArgs): Promise<void> => {
     statusOptionIds,
   };
 
-  const dir = join(args.cwd, ".orchestrator");
+  const dir = join(args.cwd, ".coordinator");
   await mkdir(dir, { recursive: true });
   await writeFile(
     join(dir, "config.json"),

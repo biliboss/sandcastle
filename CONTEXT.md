@@ -200,11 +200,9 @@ _Avoid_: "stdout mode", "interactive mode", "CLI mode" (ambiguous with the CLI i
 A single item in the **agent**'s output stream -- either a `text` chunk or a `toolCall` -- surfaced to the caller of `run()` so the stream can be forwarded to an external observability system. Available only in **log-to-file mode** via the `onAgentStreamEvent` callback on the `logging` option. Each event carries its `iteration` number and a `timestamp`.
 _Avoid_: "log event" (the log file contains more than just agent output), "display entry" (internal UI type)
 
-### Orchestrator layer (multi-repo)
+### Coordinator layer (multi-repo)
 
-**Orchestrator**:
-The layer above `run()` that drives Sandcastle across multiple repos from a single GitHub Project. Distinct from Sandcastle itself, which is per-repo.
-_Avoid_: "scheduler", "manager", "controller"
+> Distinct from Sandcastle's internal `Orchestrator` class (the per-run iteration loop). This layer adds a cross-repo dimension on top of `run()` and lives under `src/coordinator/`.
 
 **Project**:
 A GitHub Project (v2) board that holds work items from many repositories. The orchestrator's source of truth for what to do next.

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * `orchestrator` CLI entry. Two subcommands so far:
- *   orchestrator init --project <n> [--owner <login>]
- *   orchestrator start
+ * `coordinator` CLI entry. Two subcommands so far:
+ *   coordinator init --project <n> [--owner <login>]
+ *   coordinator start
  *
- * Both read/write `.orchestrator/config.json` under the current cwd.
+ * Both read/write `.coordinator/config.json` under the current cwd.
  */
 
 import { readFile } from "node:fs/promises";
@@ -33,7 +33,7 @@ interface Config {
 }
 
 const loadConfig = async (cwd: string): Promise<Config> => {
-  const raw = await readFile(join(cwd, ".orchestrator/config.json"), "utf8");
+  const raw = await readFile(join(cwd, ".coordinator/config.json"), "utf8");
   return JSON.parse(raw) as Config;
 };
 
@@ -65,13 +65,13 @@ const main = async (argv: string[]): Promise<void> => {
         projectOwner: owner,
       });
       console.log(
-        `wrote .orchestrator/config.json for ${owner}/${projectNumber}`,
+        `wrote .coordinator/config.json for ${owner}/${projectNumber}`,
       );
       return;
     }
     case "start": {
       const config = await loadConfig(cwd);
-      const profilesPath = join(cwd, ".orchestrator/profiles.js");
+      const profilesPath = join(cwd, ".coordinator/profiles.js");
       const { profiles, defaultProfiles } = (await import(profilesPath)) as {
         profiles: Parameters<typeof createAgentRegistry>[0]["profiles"];
         defaultProfiles: Parameters<
@@ -95,12 +95,12 @@ const main = async (argv: string[]): Promise<void> => {
         },
       });
       const repoCache = createRepoCache({
-        cacheDir: join(process.env.HOME ?? cwd, ".orchestrator/repos"),
+        cacheDir: join(process.env.HOME ?? cwd, ".coordinator/repos"),
       });
       const dispatcher = createDispatcher({
         repoCache,
         sandcastleRun: (args) => run(args as any) as any,
-        sessionDir: join(process.env.HOME ?? cwd, ".orchestrator/sessions"),
+        sessionDir: join(process.env.HOME ?? cwd, ".coordinator/sessions"),
       });
       const aggregator = createResultAggregator({
         fetchGraphQL,
@@ -135,7 +135,7 @@ const main = async (argv: string[]): Promise<void> => {
       return;
     }
     default:
-      console.error("Usage: orchestrator <init|start> [args]");
+      console.error("Usage: coordinator <init|start> [args]");
       process.exit(2);
   }
 };

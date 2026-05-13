@@ -1,7 +1,7 @@
 /**
  * RepoCache — host-side cache of bare git clones.
  *
- * The orchestrator stores one bare repo per `owner/name` at
+ * The coordinator stores one bare repo per `owner/name` at
  * `<cacheDir>/<owner>__<name>.git`. `sandcastle.run()` carves worktrees off
  * the cache rather than cloning per dispatch.
  */

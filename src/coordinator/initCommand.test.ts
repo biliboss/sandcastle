@@ -39,7 +39,7 @@ const fakeMetadata = () => ({
 });
 
 describe("runInitCommand", () => {
-  it("writes .orchestrator/config.json with resolved field ids and status options", async () => {
+  it("writes .coordinator/config.json with resolved field ids and status options", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "init-"));
     const fetchGraphQL: FetchGraphQL = vi
       .fn()
@@ -52,7 +52,7 @@ describe("runInitCommand", () => {
       projectOwner: "biliboss",
     });
 
-    const raw = await readFile(join(cwd, ".orchestrator/config.json"), "utf8");
+    const raw = await readFile(join(cwd, ".coordinator/config.json"), "utf8");
     const config = JSON.parse(raw);
     expect(config.projectNumber).toBe(16);
     expect(config.projectOwner).toBe("biliboss");

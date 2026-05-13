@@ -1,6 +1,12 @@
-# Multi-Repo Orchestrator on Sandcastle
+# Multi-Repo Coordinator on Sandcastle
 
-A coordination layer over [`@ai-hero/sandcastle`](https://github.com/mattpocock/sandcastle) that drives AI coding agents across multiple repositories from a single GitHub Project board.
+Research for the multi-repo coordinator layer on top of [`@ai-hero/sandcastle`](https://github.com/mattpocock/sandcastle).
+
+**Date:** 2026-05-13
+
+A coordination layer over `sandcastle.run()` that drives AI coding agents across multiple repositories from a single GitHub Project (v2) board. Sandcastle stays per-repo; the coordinator adds the cross-repo dimension without touching the core.
+
+> **Note on terminology:** Sandcastle already has an internal `Orchestrator` class (the per-run iteration loop). To avoid confusion, this layer is named **Coordinator**. See `CONTEXT.md` § "Coordinator layer (multi-repo)".
 
 ---
 

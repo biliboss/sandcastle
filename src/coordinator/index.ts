@@ -1,8 +1,8 @@
 /**
- * Public entry for the multi-repo orchestrator layer.
+ * Public entry for the multi-repo coordinator layer.
  *
  * Import this subpath to build a custom coordinator from JS, or use the
- * `orchestrator` CLI (which wires the same pieces).
+ * `coordinator` CLI (which wires the same pieces).
  */
 
 export { createProjectPoll } from "./ProjectPoll.js";

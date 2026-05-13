@@ -1,8 +1,8 @@
 /**
- * Multi-repo orchestrator types.
+ * Multi-repo coordinator types.
  *
- * The orchestrator drives `sandcastle.run()` across many repos from a single
- * GitHub Project (v2). See CONTEXT.md "Orchestrator layer (multi-repo)" for
+ * The coordinator drives `sandcastle.run()` across many repos from a single
+ * GitHub Project (v2). See CONTEXT.md "Coordinator layer (multi-repo)" for
  * the ubiquitous language used here.
  */
 
@@ -15,7 +15,7 @@ import type {
 /**
  * Status values matching the GitHub Project board.
  *
- * Two statuses trigger the orchestrator:
+ * Two statuses trigger the coordinator:
  *   - "Ready to Research" → research dispatch
  *   - "Ready to-do" → dev dispatch
  *
@@ -69,7 +69,7 @@ export interface WorkItemEvent {
 
 /**
  * A named bundle of providers + config that the dispatcher uses to invoke
- * `sandcastle.run()`. Users define profiles in `.orchestrator/profiles.ts`.
+ * `sandcastle.run()`. Users define profiles in `.coordinator/profiles.ts`.
  */
 export interface AgentProfile {
   readonly agent: AgentProvider;
