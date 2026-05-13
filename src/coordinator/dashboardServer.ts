@@ -37,10 +37,14 @@ export interface DashboardServerOptions {
   readonly tmuxBridge?: TmuxBridge;
   /** Sink used to emit action.ack events. Required when tmuxBridge is set. */
   readonly events?: EventSink;
+  /** Optional poke that wakes the coordinator's poll-interval sleep early.
+   *  When provided, POST /act/tick-now becomes available even without a
+   *  tmux bridge — it just schedules the next tick. */
+  readonly tickNow?: () => void;
 }
 
 /** Verbs accepted by POST /act/:verb. Server-side allowlist (defense-in-depth). */
-const ACTION_VERBS = new Set(["prompt"]);
+const ACTION_VERBS = new Set(["prompt", "tick-now"]);
 
 const readBody = (req: IncomingMessage, max = 64 * 1024): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -75,6 +79,27 @@ const handleAction = async (
 ): Promise<void> => {
   if (!ACTION_VERBS.has(verb)) {
     json(res, 404, { ok: false, error: `unknown verb: ${verb}` });
+    return;
+  }
+  // tick-now is the one verb that does NOT need the tmux bridge — it just
+  // pokes the coordinator's sleep loop. All other verbs require both.
+  if (verb === "tick-now") {
+    if (!opts.tickNow || !opts.events) {
+      json(res, 503, { ok: false, error: "tick-now not configured" });
+      return;
+    }
+    const actionId = randomUUID();
+    try {
+      opts.tickNow();
+      await opts.events.emit({ type: "action.ack", actionId, verb, ok: true });
+      json(res, 200, { ok: true, actionId });
+    } catch (err) {
+      const msg = (err as Error).message;
+      await opts.events.emit({
+        type: "action.ack", actionId, verb, ok: false, error: msg,
+      });
+      json(res, 500, { ok: false, actionId, error: msg });
+    }
     return;
   }
   if (!opts.tmuxBridge || !opts.events) {
@@ -327,6 +352,7 @@ const handleInfo = (
       pollIntervalSec: opts.pollIntervalSec ?? null,
       tmuxEnabled: Boolean(opts.tmuxBridge && opts.events),
       tmuxTarget: opts.tmuxBridge?.targetPane ?? null,
+      tickNowEnabled: Boolean(opts.tickNow && opts.events),
     }),
   );
 };

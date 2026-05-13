@@ -130,6 +130,9 @@ header.console {
   color: var(--phos);
 }
 .countdown .num.due { color: var(--amber); animation: blink 0.6s steps(2) infinite; }
+.countdown.tick-clickable { cursor: pointer; }
+.countdown.tick-clickable:hover .ring { stroke: var(--amber); filter: drop-shadow(0 0 8px var(--amber)); }
+.countdown.tick-clickable:hover .num { color: var(--amber); }
 
 /* Tick-history strip inside the countdown tile */
 .ticks-wrap { display: flex; flex-direction: column; gap: 4px; }

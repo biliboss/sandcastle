@@ -15,7 +15,8 @@ import {
   runBuildImageCommand,
   AGENT_BASE_IMAGE_TAG,
 } from "./buildImageCommand.js";
-import { runStartLoop, realSleep } from "./startCommand.js";
+import { runStartLoop } from "./startCommand.js";
+import { createWakeableSleep } from "./wakeableSleep.js";
 import { createProjectPoll } from "./ProjectPoll.js";
 import { createClaimItem } from "./claimItem.js";
 import { createDispatcher } from "./Dispatcher.js";
@@ -189,6 +190,10 @@ const main = async (argv: string[]): Promise<void> => {
       process.on("SIGINT", () => controller.abort());
       process.on("SIGTERM", () => controller.abort());
 
+      // Wakeable sleep so the dashboard's POST /act/tick-now can short-circuit
+      // the next poll-interval wait. wake() is a no-op when no sleep pending.
+      const wakeable = createWakeableSleep();
+
       // Embedded dashboard (on by default). `--no-dashboard` disables it
       // entirely; `--dashboard-port` overrides the port; `--no-open` skips
       // the auto-open behavior.
@@ -218,7 +223,9 @@ const main = async (argv: string[]): Promise<void> => {
           port,
           host,
           pollIntervalSec: config.pollIntervalSec,
-          ...(tmuxBridge ? { tmuxBridge, events: bus.sink } : {}),
+          events: bus.sink,
+          tickNow: wakeable.wake,
+          ...(tmuxBridge ? { tmuxBridge } : {}),
         });
         dashboard = handle;
         const noOpen = rest.includes("--no-open");
@@ -245,7 +252,7 @@ const main = async (argv: string[]): Promise<void> => {
 
       await runStartLoop({
         coordinator,
-        sleep: realSleep,
+        sleep: wakeable.sleep,
         pollIntervalMs: config.pollIntervalSec * 1000,
         signal: controller.signal,
         onError: (err) => console.error("[tick error]", err),

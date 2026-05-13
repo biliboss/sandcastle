@@ -16,8 +16,27 @@ export async function fetchInfo(store) {
       enabled: Boolean(info.tmuxEnabled),
       target: info.tmuxTarget || "?",
     };
+    store.tickNowEnabled = Boolean(info.tickNowEnabled);
   } catch {
     /* server unreachable — leave defaults */
+  }
+}
+
+export async function tickNow(store) {
+  store.ack.hint = "tick…";
+  try {
+    const res = await fetch("/act/tick-now", { method: "POST" });
+    const data = await res.json();
+    if (!data.ok) {
+      store.ack.hint = "error";
+      store.toast(`tick failed: ${data.error || res.status}`, true);
+      return;
+    }
+    store.pendingActions.set(data.actionId, { verb: "tick-now", sentAt: Date.now() });
+    store.ack.hint = "tick poked";
+  } catch (err) {
+    store.ack.hint = "error";
+    store.toast(`tick failed: ${err.message}`, true);
   }
 }
 

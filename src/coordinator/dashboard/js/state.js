@@ -34,6 +34,7 @@ export function buildStore() {
     bootedAt: Date.now(),
     now: Date.now(),
     tmux: { enabled: false, target: "" },
+    tickNowEnabled: false,
     /** "init" | "open" | "error" — drives the header connection dot. */
     connState: "init",
     ack: { hint: "ready", toast: { msg: "", isErr: false, show: false } },

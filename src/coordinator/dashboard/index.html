@@ -118,7 +118,9 @@
               LAST <span style="color: var(--amber)" x-text="$store.coord.lastTickAt ? $fmt.time($store.coord.lastTickAt) : '--:--:--'">--:--:--</span>
             </div>
           </div>
-          <div class="countdown" title="next coordinator poll">
+          <div class="countdown" title="next coordinator poll · click to fire now"
+               @click="if ($store.coord.tickNowEnabled) tickNow()"
+               :class="{ 'tick-clickable': $store.coord.tickNowEnabled }">
             <svg viewBox="0 0 78 78">
               <circle class="track"></circle>
               <circle class="ring"

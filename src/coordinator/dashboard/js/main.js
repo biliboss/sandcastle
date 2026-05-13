@@ -20,7 +20,7 @@
 
 import { buildStore } from "./state.js";
 import { startSse } from "./stream.js";
-import { fetchInfo, sendPrompt } from "./actions.js";
+import { fetchInfo, sendPrompt, tickNow } from "./actions.js";
 import { pollRemaining, ringOffset } from "./stats.js";
 import { classifyError } from "./classifyError.js";
 import { groupErrors } from "./errorGrouping.js";
@@ -68,6 +68,9 @@ document.addEventListener("alpine:init", () => {
       const text = e.target.value;
       e.target.value = "";
       sendPrompt(Alpine.store("coord"), text);
+    },
+    tickNow() {
+      return tickNow(Alpine.store("coord"));
     },
     issueHref(item) {
       if (!item.repo || !item.issueNumber) return null;
