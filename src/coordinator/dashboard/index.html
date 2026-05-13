@@ -25,6 +25,10 @@
          `defer` attribute is required so Alpine waits for the parser; our
          own main.js (also defer'd via type=module) registers the store +
          magics on the alpine:init event before Alpine walks the DOM. -->
+    <!-- Alpine plugins must load BEFORE Alpine core. The intersect plugin
+         exposes the `x-intersect` directive for IntersectionObserver-driven
+         lazy mounting (used to defer the per-station event log markup). -->
+    <script defer src="https://unpkg.com/@alpinejs/[email protected]/dist/cdn.min.js"></script>
     <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js"></script>
     <script type="module" src="/static/js/main.js"></script>
   </head>
@@ -126,6 +130,8 @@
           </template>
           <template x-for="item in $store.coord.active" :key="item.itemId">
             <div class="station"
+                 x-data="{ logMounted: false }"
+                 x-intersect.once="logMounted = true"
                  :data-state="$isStuck(item, $store.coord.phaseThresholds, $store.coord.now) ? 'stuck' : item.state">
               <div class="station-body">
                 <div class="ident">
@@ -176,12 +182,18 @@
               <details>
                 <summary>EVENT LOG <span class="count" x-text="item.events.length"></span></summary>
                 <div class="log">
-                  <template x-for="ev in item.events.slice().reverse()" :key="ev.ts + ':' + ev.type">
-                    <div class="log-line" :class="$eventLine(ev).kind">
-                      <span class="glyph" x-text="$eventLine(ev).glyph"></span>
-                      <span class="when" x-text="$fmt.time(ev.ts)"></span>
-                      <span class="what" x-html="$eventLine(ev).html"></span>
-                    </div>
+                  <!-- Lazy-mount: log lines only render once the station has
+                       scrolled into view (set logMounted via x-intersect.once
+                       on the station root). Saves Alpine the per-event template
+                       walk for stations the operator hasn't looked at yet. -->
+                  <template x-if="logMounted">
+                    <template x-for="ev in item.events.slice().reverse()" :key="ev.ts + ':' + ev.type">
+                      <div class="log-line" :class="$eventLine(ev).kind">
+                        <span class="glyph" x-text="$eventLine(ev).glyph"></span>
+                        <span class="when" x-text="$fmt.time(ev.ts)"></span>
+                        <span class="what" x-html="$eventLine(ev).html"></span>
+                      </div>
+                    </template>
                   </template>
                 </div>
               </details>
@@ -245,8 +257,11 @@
       </section>
     </main>
 
-    <!-- Tmux control plane: hidden until /info reports tmuxEnabled: true. -->
-    <div class="dock" x-show="$store.coord.tmux.enabled">
+    <!-- Tmux control plane: hidden until /info reports tmuxEnabled: true.
+         x-transition gives a 200ms fade-up when tmuxEnabled flips. -->
+    <div class="dock"
+         x-show="$store.coord.tmux.enabled"
+         x-transition.opacity.duration.200ms>
       <span class="prompt-glyph">&gt;</span>
       <span class="target">tmux <b x-text="$store.coord.tmux.target">—</b></span>
       <input class="prompt-input" autocomplete="off" spellcheck="false"
@@ -257,10 +272,10 @@
     </div>
 
     <div class="ack-toast"
-         :class="{
-           show: $store.coord.ack.toast.show,
-           err:  $store.coord.ack.toast.isErr
-         }"
+         x-show="$store.coord.ack.toast.show"
+         x-transition:enter.opacity.duration.180ms
+         x-transition:leave.opacity.duration.300ms
+         :class="{ err: $store.coord.ack.toast.isErr }"
          x-text="$store.coord.ack.toast.msg"></div>
 
     <footer class="bot">

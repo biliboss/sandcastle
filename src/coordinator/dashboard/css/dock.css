@@ -46,6 +46,8 @@
   letter-spacing: 0.06em; text-transform: uppercase;
 }
 
+/* Alpine drives visibility via x-show + x-transition on the element itself.
+ * CSS only owns layout, color, and the `err` modifier. */
 .ack-toast {
   position: fixed; right: 22px; bottom: 80px; z-index: 8;
   padding: 8px 14px;
@@ -55,12 +57,9 @@
   font-family: "B612 Mono", monospace;
   font-size: 11px;
   letter-spacing: 0.04em;
-  opacity: 0; transform: translateY(8px);
-  transition: opacity 180ms ease, transform 180ms ease;
   pointer-events: none;
   max-width: 480px;
 }
-.ack-toast.show { opacity: 1; transform: translateY(0); }
 .ack-toast.err { border-color: var(--red); color: var(--red); }
 
 footer.bot {
