@@ -55,4 +55,76 @@ describe("createGhFetchGraphQL", () => {
     const fetchGraphQL = createGhFetchGraphQL({ spawn });
     expect(await fetchGraphQL("q")).toEqual({ x: 1 });
   });
+
+  describe("rate-limit reporting", () => {
+    const stdoutWithHeaders = (
+      body: string,
+      headers: Record<string, string>,
+    ) => {
+      const headerLines = Object.entries(headers).map(([k, v]) => `${k}: ${v}`);
+      return ["HTTP/2.0 200 OK", ...headerLines, "", body].join("\r\n");
+    };
+
+    it("invokes onRateLimit with parsed numbers when headers are present", async () => {
+      const spawn: Spawn = vi.fn().mockResolvedValue({
+        stdout: stdoutWithHeaders('{"data":{"x":1}}', {
+          "X-RateLimit-Remaining": "4321",
+          "X-RateLimit-Limit": "5000",
+          "X-RateLimit-Reset": "1747000000",
+        }),
+        stderr: "",
+        exitCode: 0,
+      });
+      const onRateLimit = vi.fn();
+      const fetchGraphQL = createGhFetchGraphQL({ spawn, onRateLimit });
+
+      await fetchGraphQL("q");
+
+      expect(onRateLimit).toHaveBeenCalledOnce();
+      expect(onRateLimit).toHaveBeenCalledWith({
+        remaining: 4321,
+        limit: 5000,
+        resetAt: new Date(1747000000 * 1000).toISOString(),
+      });
+    });
+
+    it("does NOT call onRateLimit when headers are missing", async () => {
+      const spawn: Spawn = vi.fn().mockResolvedValue({
+        stdout: '{"data":{"x":1}}',
+        stderr: "",
+        exitCode: 0,
+      });
+      const onRateLimit = vi.fn();
+      const fetchGraphQL = createGhFetchGraphQL({ spawn, onRateLimit });
+      await fetchGraphQL("q");
+      expect(onRateLimit).not.toHaveBeenCalled();
+    });
+
+    it("includes the -i flag when onRateLimit is registered", async () => {
+      const spawn: Spawn = vi.fn().mockResolvedValue({
+        stdout: stdoutWithHeaders("{}", {}),
+        stderr: "",
+        exitCode: 0,
+      });
+      createGhFetchGraphQL({ spawn, onRateLimit: () => {} });
+      const f = createGhFetchGraphQL({ spawn, onRateLimit: () => {} });
+      await f("q");
+      const args = (spawn as ReturnType<typeof vi.fn>).mock
+        .calls[0]![1] as string[];
+      expect(args).toContain("-i");
+    });
+
+    it("omits -i flag when onRateLimit is NOT registered (back-compat)", async () => {
+      const spawn: Spawn = vi.fn().mockResolvedValue({
+        stdout: '{"data":{}}',
+        stderr: "",
+        exitCode: 0,
+      });
+      const f = createGhFetchGraphQL({ spawn });
+      await f("q");
+      const args = (spawn as ReturnType<typeof vi.fn>).mock
+        .calls[0]![1] as string[];
+      expect(args).not.toContain("-i");
+    });
+  });
 });

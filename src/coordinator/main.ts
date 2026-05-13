@@ -59,7 +59,15 @@ const parseArg = (argv: string[], flag: string): string | undefined => {
 const main = async (argv: string[]): Promise<void> => {
   const [, , subcommand, ...rest] = argv;
   const cwd = process.cwd();
-  const fetchGraphQL = createGhFetchGraphQL();
+  // The events sink is constructed inside the `start` branch (it depends on
+  // `cwd`), so we late-bind the rate-limit forwarder via a mutable holder.
+  // While idle (init/build-image), no listener fires and the wrapper is a no-op.
+  const rateLimitListenerRef: {
+    fn?: (info: { remaining: number; limit: number; resetAt: string }) => void;
+  } = {};
+  const fetchGraphQL = createGhFetchGraphQL({
+    onRateLimit: (info) => rateLimitListenerRef.fn?.(info),
+  });
 
   switch (subcommand) {
     case "init": {
@@ -136,6 +144,9 @@ const main = async (argv: string[]): Promise<void> => {
       });
       const bus = createEventBus(eventsFilePath(cwd));
       const events = bus.sink;
+      rateLimitListenerRef.fn = (info) => {
+        void events.emit({ type: "gh.ratelimit", ...info });
+      };
       const dispatcher = createDispatcher({
         repoCache,
         sandcastleRun: dockerRunFn,

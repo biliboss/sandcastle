@@ -84,6 +84,16 @@ export type CoordinatorEvent =
       ok: boolean;
       /** Short error message when ok=false. */
       error?: string;
+    }
+  | {
+      type: "gh.ratelimit";
+      ts: string;
+      /** Calls remaining before throttling. */
+      remaining: number;
+      /** Total quota for the current window. */
+      limit: number;
+      /** ISO timestamp when the quota resets. */
+      resetAt: string;
     };
 
 export type CoordinatorEventInput = CoordinatorEvent extends infer E

@@ -38,6 +38,8 @@ export function buildStore() {
     connState: "init",
     ack: { hint: "ready", toast: { msg: "", isErr: false, show: false } },
     pendingActions: new Map(),
+    /** Latest GH rate-limit headers, populated by gh.ratelimit events. */
+    ghRateLimit: null, // { remaining, limit, resetAt }
 
     // Internal: incremental item aggregation. Mutated only by pushEvent →
     // applyItemEvent. Templates read it via the `items` getter below.
@@ -57,6 +59,14 @@ export function buildStore() {
       }
       if (ev.type === "tick.start") {
         this.lastTickAt = ev.ts;
+        return;
+      }
+      if (ev.type === "gh.ratelimit") {
+        this.ghRateLimit = {
+          remaining: ev.remaining,
+          limit: ev.limit,
+          resetAt: ev.resetAt,
+        };
         return;
       }
       if (ev.type === "tick.done") {

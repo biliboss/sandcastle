@@ -83,6 +83,24 @@
           <div class="v dim" x-text="String($store.coord.events.length).padStart(3,'0')">000</div>
           <div class="sub">— jsonl entries</div>
         </div>
+        <div class="tile">
+          <div class="lbl">gh quota</div>
+          <template x-if="$store.coord.ghRateLimit">
+            <div class="v"
+                 :class="{
+                   amb: $store.coord.ghRateLimit.remaining < $store.coord.ghRateLimit.limit * 0.2,
+                   dim: $store.coord.ghRateLimit.remaining >= $store.coord.ghRateLimit.limit * 0.5
+                 }"
+                 :style="{
+                   color: $store.coord.ghRateLimit.remaining < 200 ? 'var(--red)' : ''
+                 }"
+                 x-text="$store.coord.ghRateLimit.remaining"></div>
+          </template>
+          <template x-if="!$store.coord.ghRateLimit">
+            <div class="v dim">—</div>
+          </template>
+          <div class="sub" x-text="$store.coord.ghRateLimit ? '— of ' + $store.coord.ghRateLimit.limit : '— awaiting first poll'"></div>
+        </div>
         <div class="tile cd">
           <div class="ticks-wrap" style="flex: 1; min-width: 0;">
             <div class="lbl">tick history · next poll</div>
