@@ -1198,6 +1198,21 @@ hooks: {
 - If any hook exits non-zero, setup fails fast.
 - When a `signal` is passed to `run()`, it is threaded to all hooks — aborting the signal cancels any in-flight hook commands.
 
+## Multi-Repo Coordinator
+
+Sandcastle's `run()` is per-repo by design. The optional **coordinator** layer (`@ai-hero/sandcastle/coordinator`) drives `run()` across many repos from a single GitHub Project (v2) board. Two human review gates (research, dev) are first-class; multi-repo work is modelled as parent issue + sub-issues using the project's native `Repository` field. See [research/multi-repo-coordinator-research.md](./research/multi-repo-coordinator-research.md) for the full design and [docs/adr/](./docs/adr/) (ADRs 0015–0017) for the decisions.
+
+Quick start:
+
+```bash
+gh project list --owner @me         # find your project
+npx coordinator init --project 16   # writes .coordinator/config.json
+# edit .coordinator/profiles.ts to define agent profiles
+npx coordinator start               # polls project, dispatches runs
+```
+
+The coordinator uses the `gh` CLI for GraphQL — no new dependencies. Each dispatch invokes `sandcastle.run()` against a bare-clone cache under `~/.coordinator/repos/`, so worktrees stay cheap and idempotent across retries. Status transitions on the project are atomic (CAS), so multiple coordinator hosts can run in parallel without double-dispatch.
+
 ## Development
 
 ```bash

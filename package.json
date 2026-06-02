@@ -29,14 +29,19 @@
     "./sandboxes/no-sandbox": {
       "import": "./dist/sandboxes/no-sandbox.js",
       "types": "./dist/sandboxes/no-sandbox.d.ts"
+    },
+    "./coordinator": {
+      "import": "./dist/coordinator/index.js",
+      "types": "./dist/coordinator/index.d.ts"
     }
   },
   "bin": {
-    "sandcastle": "dist/main.js"
+    "sandcastle": "dist/main.js",
+    "coordinator": "dist/coordinator/main.js"
   },
   "scripts": {
     "build": "tsgo --project tsconfig.build.json",
-    "postbuild": "rm -rf dist/templates && cp -r src/templates dist/templates",
+    "postbuild": "rm -rf dist/templates && cp -r src/templates dist/templates && rm -rf dist/coordinator/dashboard && cp -r src/coordinator/dashboard dist/coordinator/dashboard && rm -rf dist/coordinator/docker && cp -r src/coordinator/docker dist/coordinator/docker",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsgo --noEmit",

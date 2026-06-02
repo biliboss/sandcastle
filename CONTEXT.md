@@ -200,6 +200,62 @@ _Avoid_: "stdout mode", "interactive mode", "CLI mode" (ambiguous with the CLI i
 A single item in the **agent**'s output stream -- either a `text` chunk or a `toolCall` -- surfaced to the caller of `run()` so the stream can be forwarded to an external observability system. Available only in **log-to-file mode** via the `onAgentStreamEvent` callback on the `logging` option. Each event carries its `iteration` number and a `timestamp`.
 _Avoid_: "log event" (the log file contains more than just agent output), "display entry" (internal UI type)
 
+### Coordinator layer (multi-repo)
+
+> Distinct from Sandcastle's internal `Orchestrator` class (the per-run iteration loop). This layer adds a cross-repo dimension on top of `run()` and lives under `src/coordinator/`.
+
+**Project**:
+A GitHub Project (v2) board that holds work items from many repositories. The orchestrator's source of truth for what to do next.
+_Avoid_: "board", "kanban" (too UI-flavoured), "epic" (Jira-flavoured)
+
+**Work item**:
+A single row in a **project**, backed by a GitHub issue in some repo. Carries a status, a target repo, and optionally an **agent profile**.
+_Avoid_: "task", "ticket", "card"
+
+**Target repo**:
+The repository a **work item** acts on, read from the project's native `Repository` field. One work item = one target repo (multi-repo work is modelled as parent issue + N sub-issues, each with its own target repo).
+_Avoid_: "repo" (too short — collides with cache repo, fork repo, etc.)
+
+**Dispatch**:
+The act of consuming one **work item** and invoking `sandcastle.run()` for its **target repo**. One dispatch = one Sandcastle run session.
+_Avoid_: "trigger", "enqueue", "fire"
+
+**Agent profile**:
+A named bundle of `(agent provider, sandbox provider, branch strategy, env resolver)` selected per **work item** via the `Agent Profile` field. Lives in `.orchestrator/profiles.ts`.
+_Avoid_: "preset", "config", "agent config"
+
+**Coordinator**:
+The host process that polls a **project**, claims **work items** via CAS on the `Status` field, dispatches them, and writes results back. Stateless except for the project itself.
+_Avoid_: "daemon", "worker", "runner"
+
+**Claim**:
+An atomic status transition on a **work item** (CAS via GraphQL) that marks it as picked up by a **coordinator**. Prevents double-dispatch when multiple coordinators run in parallel.
+_Avoid_: "lock", "reserve"
+
+**Repo cache**:
+A host-side directory of working clones (`~/src/factory/<name>/`) that the **coordinator** maintains. `sandcastle.run()` carves worktrees off the cache rather than cloning per dispatch.
+_Avoid_: "mirror", "workspace"
+
+**Factory workspace**:
+The `~/src/factory/` directory — the host-side root the **coordinator** operates from. Holds the **coordinator** code itself (`./sandcastle/`), the **repo cache** as flat `<name>/` directories, and the **worktree namespace** at `.worktrees/<repo>/<branch>/`. Repo-agnostic: humans run `coordinator` from here and never `cd` into individual repos.
+_Avoid_: "workspace" (overloaded), "wt-root"
+
+**Agent base image**:
+The single Docker image (`coordinator/agent-base`) used by **every** dispatch. Lean by design (git, node, claudeCode, ripgrep, fd, jq). Built locally via `coordinator build-image`. Repos that need extra toolchain ship a per-repo **setup hook**.
+_Avoid_: "sandbox image" (Sandcastle's per-repo `sandcastle:<repo>` is different), "base"
+
+**Setup hook**:
+An executable script at `.coordinator/setup.sh` in a **target repo**. If present, the **agent base image** runs it as the agent user before invoking Claude. Lets a repo install its language toolchain into the container's writable scratch tmpfs without bloating the base image.
+_Avoid_: "init script", "entrypoint" (Docker has its own ENTRYPOINT semantics)
+
+**Credential set**:
+A long-lived authentication token produced by `claude setup-token`, scoped to one `CLAUDE_CONFIG_DIR` identity (e.g. `claude-pessoal`, `claude-mukutu`). Stored in `.coordinator/.env.<alias>`, injected as env into the **agent**'s container at dispatch. Each **agent profile** pins one **credential set**.
+_Avoid_: "token", "API key" (a credential set is OAuth-derived, not API-key)
+
+**Agent network**:
+The Docker bridge network (`agent-net`) all **agent** containers attach to. ICC-disabled — sibling agents cannot reach each other. Outbound internet is open for now; an egress allowlist via a sibling **coordinator-proxy** container is a planned follow-up.
+_Avoid_: "sandbox network" (would conflict with **sandbox** as our isolation concept)
+
 ## Relationships
 
 - **Sandcastle** orchestrates an **agent** inside a **sandbox**

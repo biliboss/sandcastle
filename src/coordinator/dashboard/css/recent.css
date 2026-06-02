@@ -1,0 +1,117 @@
+/*
+ * recent.css — RECENT · COMPLETIONS strip.
+ *
+ * One compact row per completed dispatch (ok or error). Error rows are
+ * click-to-expand: a hidden `.err-full` block below the row reveals the full
+ * stderr text. The `.err-chip` is rendered inside the row's right column when
+ * the dispatch failed; chip color encodes the classified error kind (see
+ * src/coordinator/errorClassifier.ts).
+ */
+
+.recent { display: grid; gap: 4px; }
+
+.recent-row {
+  display: grid;
+  grid-template-columns: 8px 80px 90px 1fr auto;
+  gap: 14px;
+  padding: 6px 14px;
+  background: rgba(8, 16, 22, 0.4);
+  border-left: 2px solid var(--text-dim);
+  font-family: "B612 Mono", monospace;
+  font-size: 11px;
+  align-items: center;
+}
+.recent-row.ok { border-left-color: var(--phos); }
+.recent-row.err { border-left-color: var(--red); cursor: pointer; }
+.recent-row.err .right { color: var(--red); }
+
+.recent-row .glyph {
+  font-family: "VT323", monospace;
+  font-size: 16px;
+  line-height: 1;
+  text-align: center;
+}
+.recent-row.ok .glyph { color: var(--phos); }
+.recent-row.err .glyph { color: var(--red); }
+
+.recent-row .when {
+  font-family: "VT323", monospace;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.recent-row .phase {
+  font-family: "VT323", monospace;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cyan);
+}
+.recent-row .phase.dev { color: var(--phos); }
+.recent-row .phase.approved { color: var(--amber); }
+
+.recent-row .title {
+  color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.recent-row .right {
+  font-family: "B612 Mono", monospace;
+  font-size: 10.5px;
+  color: var(--text-mid);
+  letter-spacing: 0.04em;
+}
+.recent-row .right a {
+  color: var(--cyan); text-decoration: none;
+  border-bottom: 1px dotted var(--cyan);
+}
+.recent-row .right a:hover { color: var(--phos); border-color: var(--phos); }
+
+/* Error-kind chip — color mapped from classifyError().cls */
+.err-chip {
+  display: inline-block;
+  padding: 1px 6px;
+  margin-right: 6px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  font-family: "VT323", monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  vertical-align: 1px;
+}
+.err-chip.auth        { color: var(--amber); }
+.err-chip.clone       { color: var(--cyan); }
+.err-chip.push_reject { color: #ff8a3d; }
+.err-chip.timeout     { color: #c77dff; }
+.err-chip.unknown     { color: var(--text-dim); }
+
+/* Count badge next to chip when groupErrors collapsed N>1 identical errors */
+.err-count {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 5px;
+  background: rgba(255, 92, 92, 0.18);
+  color: var(--red);
+  font-family: "VT323", monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  vertical-align: 1px;
+}
+
+/* Click-to-expand on errored rows */
+.recent-row.err-expanded { grid-template-columns: 8px 80px 90px 1fr; }
+.recent-row.err-expanded .right { display: none; }
+.err-full {
+  display: none;
+  grid-column: 2 / -1;
+  margin-top: 4px;
+  padding: 8px 12px;
+  background: rgba(255, 92, 92, 0.05);
+  border-left: 2px solid var(--red);
+  color: var(--red);
+  font-family: "B612 Mono", monospace;
+  font-size: 10.5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.recent-row.err-expanded .err-full { display: block; }

@@ -1,0 +1,265 @@
+/*
+ * station.css — `.station` row (one per in-flight dispatch) + its inner
+ * pipeline strip + expandable event log.
+ *
+ * Visual contract:
+ *   .station[data-state="running"|"ok"|"error"]   — left spine color
+ *   .station-body .ident   — agent profile + phase label
+ *   .station-body .core    — title + meta + pipeline
+ *   .station-body .right   — elapsed counter + state badge
+ *   .station details > .log  — collapsible event log
+ *
+ * The 5-node pipeline (CACHE → CLONE → EXEC → PUSH → PR) lives here too,
+ * since it's only ever rendered inside .station.core.
+ */
+
+.stations { display: grid; gap: 10px; }
+
+.station {
+  position: relative;
+  display: grid;
+  grid-template-columns: 4px 1fr;
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  overflow: hidden;
+}
+.station[data-state="running"]::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 4px; background: var(--amber);
+  box-shadow: 0 0 10px var(--amber);
+  animation: spineRun 1.6s ease-in-out infinite;
+}
+.station[data-state="ok"]::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 4px; background: var(--phos);
+  box-shadow: 0 0 8px var(--phos);
+}
+.station[data-state="error"]::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 4px; background: var(--red);
+  box-shadow: 0 0 8px var(--red);
+}
+/* "stuck" — running but past the 2x p95 threshold for current phase */
+.station[data-state="stuck"]::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 4px; background: var(--red);
+  box-shadow: 0 0 12px var(--red);
+  animation: blink 0.9s steps(2) infinite;
+}
+.station[data-state="stuck"] .right .state { color: var(--red); }
+.station[data-state="stuck"] .right .elapsed { color: var(--red); text-shadow: 0 0 8px rgba(255, 95, 95, 0.4); }
+
+.station-body {
+  grid-column: 2;
+  padding: 12px 16px 12px 14px;
+  display: grid;
+  grid-template-columns: 110px 1fr auto;
+  gap: 18px;
+  align-items: center;
+}
+
+.station .ident {
+  display: flex; flex-direction: column; gap: 2px;
+  font-family: "B612 Mono", monospace;
+}
+.station .ident .agent {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--magenta);
+}
+.station .ident .phase {
+  font-family: "VT323", monospace;
+  font-size: 18px;
+  letter-spacing: 0.06em;
+  color: var(--cyan);
+  line-height: 1;
+}
+.station .ident .phase.dev { color: var(--phos); }
+.station .ident .phase.approved { color: var(--amber); }
+
+.station .core { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.station .core .title {
+  font-size: 13px; font-weight: 500;
+  color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.station .core .meta {
+  font-family: "B612 Mono", monospace;
+  font-size: 10.5px;
+  color: var(--text-mid);
+  letter-spacing: 0.04em;
+  display: flex; gap: 14px; flex-wrap: wrap;
+}
+.station .core .meta a {
+  color: var(--cyan);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--cyan);
+}
+.station .core .meta a:hover { color: var(--phos); border-color: var(--phos); }
+.station .core .meta .k { color: var(--text-dim); margin-right: 4px; }
+
+/* Pipeline: cache → clone → exec → push → pr */
+.pipeline {
+  display: grid;
+  grid-template-columns: repeat(5, auto);
+  align-items: center;
+  gap: 0;
+  font-family: "B612 Mono", monospace;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.pipeline .node {
+  display: grid; place-items: center;
+  position: relative;
+  padding: 0 8px;
+}
+.pipeline .node .glyph {
+  width: 14px; height: 14px;
+  border: 1px solid var(--text-dim);
+  background: transparent;
+  position: relative;
+  display: grid; place-items: center;
+}
+.pipeline .node .glyph::after {
+  content: "";
+  width: 4px; height: 4px;
+  background: var(--text-dim);
+}
+.pipeline .node.done .glyph { border-color: var(--phos); }
+.pipeline .node.done .glyph::after { background: var(--phos); box-shadow: 0 0 6px var(--phos); }
+.pipeline .node.active .glyph {
+  border-color: var(--amber);
+  animation: blinkSoft 1s steps(2) infinite;
+}
+.pipeline .node.active .glyph::after { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+.pipeline .node.err .glyph { border-color: var(--red); }
+.pipeline .node.err .glyph::after { background: var(--red); box-shadow: 0 0 6px var(--red); }
+.pipeline .lbl { margin-top: 4px; font-size: 8.5px; color: var(--text-dim); }
+.pipeline .node.done .lbl { color: var(--phos-mid); }
+.pipeline .node.active .lbl { color: var(--amber); }
+.pipeline .conn {
+  width: 22px; height: 1px;
+  background: var(--text-dim);
+  align-self: start;
+  margin-top: 7px;
+}
+.pipeline .conn.done { background: var(--phos-mid); }
+
+/* Heartbeat-lag sparkline — sits below the pipeline strip in .core */
+.heartbeat {
+  width: 100%;
+  height: 14px;
+  display: block;
+  margin-top: 4px;
+}
+.heartbeat polyline {
+  fill: none;
+  stroke: var(--phos-mid);
+  stroke-width: 1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.station[data-state="stuck"] .heartbeat polyline { stroke: var(--red); }
+.station[data-state="error"] .heartbeat polyline { stroke: var(--red); }
+
+.station .right {
+  text-align: right;
+  font-family: "VT323", monospace;
+  line-height: 1.1;
+}
+.station .right .elapsed {
+  font-size: 26px;
+  color: var(--phos);
+  text-shadow: 0 0 8px rgba(98,255,155,0.35);
+  letter-spacing: 0.04em;
+}
+.station .right .elapsed.err { color: var(--red); text-shadow: 0 0 8px rgba(255, 95, 95, 0.4); }
+.station .right .state {
+  margin-top: 2px;
+  font-family: "B612 Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+.station[data-state="ok"] .right .state { color: var(--phos); }
+.station[data-state="error"] .right .state { color: var(--red); }
+
+/* Collapsible event log */
+.station .log {
+  grid-column: 2;
+  padding: 8px 16px 12px 14px;
+  border-top: 1px dashed var(--hairline);
+  background:
+    repeating-linear-gradient(0deg, transparent 0, transparent 22px, rgba(98,255,155,0.018) 22px, rgba(98,255,155,0.018) 23px);
+  max-height: 200px;
+  overflow-y: auto;
+}
+.station details > summary {
+  cursor: pointer;
+  list-style: none;
+  font-family: "B612 Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-mid);
+  padding: 6px 16px 6px 14px;
+  border-top: 1px dashed var(--hairline);
+  user-select: none;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.station details > summary::-webkit-details-marker { display: none; }
+.station details > summary::before {
+  content: "▸"; color: var(--phos-mid);
+  display: inline-block; transition: transform 0.15s ease;
+}
+.station details[open] > summary::before { transform: rotate(90deg); }
+.station details > summary:hover { color: var(--text); }
+.station details > summary .count { margin-left: auto; color: var(--text-dim); }
+
+.log-line {
+  display: grid;
+  grid-template-columns: 16px 74px 1fr;
+  gap: 6px;
+  font-size: 11px;
+  padding: 1px 0;
+  color: var(--text-mid);
+}
+.log-line .glyph {
+  text-align: center;
+  font-family: "VT323", monospace;
+  font-size: 13px;
+  line-height: 16px;
+}
+.log-line.k-claim .glyph { color: var(--cyan); }
+.log-line.k-start .glyph { color: var(--amber); }
+.log-line.k-progress .glyph { color: var(--text-dim); }
+.log-line.k-done-ok .glyph { color: var(--phos); }
+.log-line.k-done-err .glyph { color: var(--red); }
+.log-line .when {
+  font-family: "VT323", monospace;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 16px;
+}
+.log-line .what { color: var(--text); line-height: 16px; }
+.log-line.k-progress .what { color: var(--text-mid); }
+.log-line .what .step { color: var(--amber); }
+.log-line .what .lbl { color: var(--cyan); }
+.log-line .what .err {
+  color: var(--red);
+  background: rgba(255,95,95,0.08);
+  padding: 0 6px;
+  border-left: 2px solid var(--red);
+}
+.log-line .what a {
+  color: var(--cyan);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--cyan);
+}
+.log-line .what a:hover { color: var(--phos); border-color: var(--phos); }

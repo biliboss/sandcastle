@@ -140,7 +140,14 @@ export const create = (
 > =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const worktreesDir = join(repoDir, ".sandcastle", "worktrees");
+    // Coordinator override (ADR 0021 fork-patch): when
+    // `COORDINATOR_WORKTREE_DIR` is set, place worktrees at
+    // `<envDir>/<basename(repoDir)>` instead of `<repoDir>/.sandcastle/worktrees`.
+    const coordOverride = process.env.COORDINATOR_WORKTREE_DIR;
+    const repoName = repoDir.split("/").filter(Boolean).pop() ?? "repo";
+    const worktreesDir = coordOverride
+      ? join(coordOverride, repoName)
+      : join(repoDir, ".sandcastle", "worktrees");
     yield* fs
       .makeDirectory(worktreesDir, { recursive: true })
       .pipe(Effect.mapError((e) => new WorktreeError({ message: e.message })));
